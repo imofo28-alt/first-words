@@ -1,6 +1,7 @@
 /* Screen switching, the two-finger parent gate, and boot. */
 
 window.FWApp = (function () {
+  const APP_VERSION = '8'; // shown on screen so a stale copy can be spotted
   const GATE_HOLD_MS = 2000;     // two fingers, held still this long, opens the parent area
   const GATE_MAX_MOVE_PX = 30;
 
@@ -84,9 +85,32 @@ window.FWApp = (function () {
   async function boot() {
     document.getElementById('btn-start').addEventListener('click', () => FWSession.begin());
 
+    document.querySelectorAll('.app-version').forEach(e => { e.textContent = 'version ' + APP_VERSION; });
+
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => { /* http on LAN: fine, just no offline */ });
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => reg.update().catch(() => {}))
+        .catch(() => { /* http on LAN: fine, just no offline */ });
+      // A newer version took over: load it now rather than on the open after next.
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloaded || !hadController) return;
+        reloaded = true;
+        if (document.body.dataset.screen !== 'session') location.reload();
+      });
     }
+
+    const latest = document.getElementById('btn-latest');
+    if (latest) latest.addEventListener('click', async () => {
+      latest.disabled = true;
+      latest.textContent = 'Fetching…';
+      try {
+        if ('serviceWorker' in navigator) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+        if (window.caches) for (const k of await caches.keys()) await caches.delete(k);
+      } catch (e) { /* storage of words is untouched either way */ }
+      location.replace(location.pathname + '?v=' + Date.now());
+    });
 
     const words = await FWDB.allWords();
     if (words.length === 0) {
