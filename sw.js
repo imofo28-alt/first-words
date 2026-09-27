@@ -1,6 +1,6 @@
 /* Offline support: network first (so updates arrive), cache as fallback. */
 
-const CACHE = 'firstwords-v3';
+const CACHE = 'firstwords-v4';
 const ASSETS = [
   '.',
   'index.html',

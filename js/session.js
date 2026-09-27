@@ -18,7 +18,7 @@ window.FWSession = (function () {
   const TAP_MAX_TRAVEL_PX = 80;       // a toddler tap wobbles; more than this is a drag
 
   // swipe mode
-  const RING_SIZE = 3;                // words per swipe session: small enough that "one back" means something
+  const RING_SIZE = 6;                // words per swipe session (the per-topic cap); he loops round them
   const AXIS_LOCK_PX = 18;            // travel before we decide sideways vs up-down
   const COMMIT_FRACTION = 0.15;       // drag this far across the screen and the next photo lands...
   const FLICK_PX_PER_MS = 0.45;       // ...or flick it
@@ -42,7 +42,7 @@ window.FWSession = (function () {
       return;
     }
     const mode = (await FWDB.getSetting('sessionMode', 'swipe')) === 'pair' ? 'pair' : 'swipe';
-    const target = parseInt(await FWDB.getSetting('tapsPerSession', 6), 10) || 6;
+    const target = parseInt(await FWDB.getSetting('tapsPerSession', 0), 10) || 0; // 0 = keep going
 
     // The least-recently practised words; massed repetition within the session.
     ready.sort((a, b) => (a.lastPracticedAt || 0) - (b.lastPracticedAt || 0));
@@ -86,7 +86,8 @@ window.FWSession = (function () {
     });
   }
 
-  // One naming moment is over: log it; true when the session is complete.
+  // One naming moment is over: log it; true when the session is complete
+  // (never, when the limit is 0 — it then ends when the parent opens the parent area).
   function countMoment(w) {
     state.moments += 1;
     FWDB.getWord(w.id).then(fresh => {
@@ -95,7 +96,7 @@ window.FWSession = (function () {
         FWDB.putWord(fresh);
       }
     });
-    return state.moments >= state.target;
+    return state.target > 0 && state.moments >= state.target;
   }
 
   function releaseUrls() {

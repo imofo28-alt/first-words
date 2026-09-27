@@ -58,7 +58,7 @@ window.FWParent = (function () {
     } else {
       note('');
     }
-    const taps = await FWDB.getSetting('tapsPerSession', 6);
+    const taps = await FWDB.getSetting('tapsPerSession', 0); // 0 = keep going
     $('f-taps').value = String(taps);
     const mode = (await FWDB.getSetting('sessionMode', 'swipe')) === 'pair' ? 'pair' : 'swipe';
     const radio = document.querySelector('input[name="session-mode"][value="' + mode + '"]');
@@ -318,13 +318,29 @@ window.FWParent = (function () {
 
   /* ---------- recording ---------- */
 
+  let stopWaiters = [];
+  let stopPending = false; // stop() was called; the browser hasn't handed over the audio yet
+
+  function requestStop() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      stopPending = true;
+      mediaRecorder.stop(); // the audio arrives a moment later, in onstop
+    }
+  }
+
+  // Resolves once any recording has been turned into recBlob (or right away).
   function stopRecorderIfNeeded() {
-    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+    requestStop();
+    if (!stopPending) return Promise.resolve();
+    return new Promise(resolve => {
+      stopWaiters.push(resolve);
+      setTimeout(resolve, 3000); // never leave the form hanging if the browser never fires onstop
+    });
   }
 
   async function toggleRecord() {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop();
+      requestStop();
       return;
     }
     if (!navigator.mediaDevices || !window.MediaRecorder) {
@@ -345,6 +361,8 @@ window.FWParent = (function () {
         $('btn-rec').textContent = '● Record again';
         $('btn-rec-play').hidden = false;
         formMsg('');
+        stopPending = false;
+        stopWaiters.splice(0).forEach(fn => fn());
       };
       mediaRecorder.start();
       recStartedAt = Date.now();
@@ -373,7 +391,7 @@ window.FWParent = (function () {
 
   async function save(e) {
     e.preventDefault();
-    stopRecorderIfNeeded();
+    await stopRecorderIfNeeded(); // a tap on Save while still recording keeps the recording
     const label = $('f-word').value.trim();
     if (!label) { formMsg('Type the word.'); return; }
     const topic = $('f-topic').value.trim() || FWDB.DEFAULT_TOPIC;
@@ -584,7 +602,7 @@ window.FWParent = (function () {
       setPreview(photoBlob);
     });
     $('f-taps').addEventListener('change', () => {
-      FWDB.setSetting('tapsPerSession', parseInt($('f-taps').value, 10) || 6);
+      FWDB.setSetting('tapsPerSession', parseInt($('f-taps').value, 10) || 0);
     });
     document.querySelectorAll('input[name="session-mode"]').forEach(r => {
       r.addEventListener('change', () => { if (r.checked) FWDB.setSetting('sessionMode', r.value); });

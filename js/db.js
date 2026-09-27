@@ -29,11 +29,62 @@ window.FWDB = (function () {
     return dbPromise;
   }
 
+  /* ---------- media storage ----------
+     Safari can hand back a Blob from IndexedDB that turns empty when it is written
+     again — e.g. saving a recording for a word re-saves "the same" photo, and the photo
+     is gone. So photos and recordings are stored as raw bytes + type, and turned back
+     into a fresh Blob on the way out. Records written before this change (plain Blobs)
+     still read fine and are converted the next time they are saved. */
+
+  function isBlob(v) { return typeof Blob !== 'undefined' && v instanceof Blob; }
+
+  function readBytes(blob) {
+    if (blob.arrayBuffer) return blob.arrayBuffer();
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsArrayBuffer(blob);
+    });
+  }
+
+  async function toStored(v) {
+    if (!v) return null;
+    if (isBlob(v)) {
+      if (!v.size) return null;
+      return { type: v.type || '', buf: await readBytes(v) };
+    }
+    if (v.buf && v.buf.byteLength) return v; // already in stored form
+    return null;
+  }
+
+  function fromStored(v) {
+    if (!v) return null;
+    if (isBlob(v)) return v.size ? v : null;
+    if (v.buf && v.buf.byteLength) return new Blob([v.buf], { type: v.type || '' });
+    return null;
+  }
+
+  function unpack(w) {
+    if (w) {
+      w.photo = fromStored(w.photo);
+      w.audio = fromStored(w.audio);
+    }
+    return w;
+  }
+
+  async function pack(w) {
+    const copy = Object.assign({}, w);
+    copy.photo = await toStored(w.photo);
+    copy.audio = await toStored(w.audio);
+    return copy;
+  }
+
   async function allWords() {
     const db = await open();
     return new Promise((resolve, reject) => {
       const req = db.transaction('words', 'readonly').objectStore('words').getAll();
-      req.onsuccess = () => resolve(req.result || []);
+      req.onsuccess = () => resolve((req.result || []).map(unpack));
       req.onerror = () => reject(req.error);
     });
   }
@@ -42,16 +93,20 @@ window.FWDB = (function () {
     const db = await open();
     return new Promise((resolve, reject) => {
       const req = db.transaction('words', 'readonly').objectStore('words').get(id);
-      req.onsuccess = () => resolve(req.result || null);
+      req.onsuccess = () => resolve(unpack(req.result || null));
       req.onerror = () => reject(req.error);
     });
   }
 
   async function putWord(word) {
+    const stored = await pack(word); // bytes are read before the transaction opens
     const db = await open();
     return new Promise((resolve, reject) => {
-      const req = db.transaction('words', 'readwrite').objectStore('words').put(word);
-      req.onsuccess = () => resolve(req.result); // id
+      const req = db.transaction('words', 'readwrite').objectStore('words').put(stored);
+      req.onsuccess = () => {
+        if (word.id == null) word.id = req.result; // a new word learns its id
+        resolve(req.result);
+      };
       req.onerror = () => reject(req.error);
     });
   }
