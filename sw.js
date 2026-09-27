@@ -1,6 +1,6 @@
 /* Offline support: network first (so updates arrive), cache as fallback. */
 
-const CACHE = 'firstwords-v6';
+const CACHE = 'firstwords-v7';
 const ASSETS = [
   '.',
   'index.html',
@@ -30,8 +30,11 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  // Own files are always re-checked with the server (ETag), so an update shows on the
+  // next open instead of after the host's 10-minute cache window.
+  const own = new URL(e.request.url).origin === self.location.origin;
   e.respondWith(
-    fetch(e.request)
+    (own ? fetch(e.request.url, { cache: 'no-cache' }) : fetch(e.request))
       .then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
