@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body data-screen="start">
 
@@ -44,6 +44,7 @@
   <div class="end-inner">
     <div class="end-dot"></div>
     <p>The end.</p>
+    <button id="btn-end-home" class="btn end-home" type="button">Home</button>
   </div>
 </section>
 
@@ -52,7 +53,10 @@
   <div class="parent-wrap">
     <header class="parent-head">
       <h2>Parent area</h2>
-      <button id="btn-to-start" class="btn primary">Start</button>
+      <div class="head-actions">
+        <button id="btn-home" class="btn" type="button">Home</button>
+        <button id="btn-to-start" class="btn primary" type="button">Start</button>
+      </div>
     </header>
     <p class="parent-note" id="parent-note" hidden></p>
     <datalist id="topic-list"></datalist>
@@ -197,9 +201,9 @@
   </div>
 </section>
 
-<script src="js/db.js"></script>
-<script src="js/session.js"></script>
-<script src="js/parent.js"></script>
-<script src="js/app.js"></script>
+<script src="js/db.js?v=11"></script>
+<script src="js/session.js?v=11"></script>
+<script src="js/parent.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
 </body>
 </html>

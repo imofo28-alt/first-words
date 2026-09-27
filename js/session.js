@@ -1,20 +1,21 @@
 /* The child session. Two ways to move between photos, chosen in the parent area:
 
-   swipe (default) — one photo. He swipes in any direction and the next photo
-     follows his finger in from that side, so "swiping this way moves things this
-     way" is something he can feel. Finger left or up = forward through a small
-     ring of words; finger right or down = back, so "that one again" is one swipe
-     back. A tap on the photo says it again.
-   pair — two photos. He taps either one; it grows alone and is named.
+   swipe (default) — one photo. He swipes in any direction and the NEXT photo
+     follows his finger in from the side he pulls from, so "swiping this way moves
+     things this way" is something he can feel. Every direction moves forward
+     through the ring (2026-09-28: no "back" direction, at the parent's request).
+     A tap on the photo says it again.
+   pair — two photos. He taps either one; it grows alone and is named. A swipe in any
+     direction brings the next two (2026-09-28, at the parent's request).
 
    In both: the parent's recorded voice names the photo; touch is dead while the
    word plays; a designed 2 s silence follows (the parent's and child's turn);
    then a cool-down. After N naming moments the session simply ends. */
 
 window.FWSession = (function () {
-  const SILENCE_AFTER_WORD_MS = 2000; // the parent+child turn
+  const SILENCE_AFTER_WORD_MS = 700;  // the parent+child turn (parent's call 2026-09-28: at most 1 s total)
   const FOCUS_MOTION_MS = 450;        // pair: photo grows / returns
-  const EXTRA_COOLDOWN_MS = 800;      // after the word, before touch counts again
+  const EXTRA_COOLDOWN_MS = 300;      // after the silence, before touch counts again
   const TAP_MAX_TRAVEL_PX = 80;       // a toddler tap wobbles; more than this is a drag
 
   // swipe mode
@@ -46,8 +47,8 @@ window.FWSession = (function () {
 
     // The least-recently practised words; massed repetition within the session.
     ready.sort((a, b) => (a.lastPracticedAt || 0) - (b.lastPracticedAt || 0));
-    const chosen = ready.slice(0, mode === 'swipe' ? Math.min(RING_SIZE, ready.length) : 2);
-    if (mode === 'swipe') chosen.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)); // a stable ring
+    const chosen = ready.slice(0, Math.min(RING_SIZE, ready.length));
+    chosen.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)); // a stable ring, both modes
 
     state = {
       mode,
@@ -57,7 +58,8 @@ window.FWSession = (function () {
         photoUrl: URL.createObjectURL(w.photo),
         audioUrl: URL.createObjectURL(w.audio)
       })),
-      order: [0, 1],  // pair: which word sits on which side
+      order: [0, 1 % chosen.length],  // pair: which word sits on which side
+      pairAt: 0,      // pair: where the current pair starts in the ring
       index: 0,       // swipe: where he is in the ring
       moments: 0,
       target,
@@ -192,35 +194,41 @@ window.FWSession = (function () {
     if (state) state.locked = false;
   }
 
+  // A swipe anywhere on the pair screen: the next two photos from the ring.
+  async function nextPair() {
+    const n = state.words.length;
+    if (n < 3) return; // only two words: nothing to move on to
+    state.locked = true;
+    state.pairAt = (state.pairAt + 2) % n;
+    state.order = [state.pairAt, (state.pairAt + 1) % n];
+    renderPair();
+    await wait(EXTRA_COOLDOWN_MS);
+    if (state) state.locked = false;
+  }
+
   function wirePair() {
-    [0, 1].forEach(i => {
-      const card = document.getElementById('card-' + i);
+    const screen = document.getElementById('screen-session');
+    const cardOf = el => el && el.closest ? el.closest('.card') : null;
 
-      card.addEventListener('pointerdown', e => {
-        if (!state || state.mode !== 'pair' || state.locked) return;
-        if (activePointer !== null) return; // first touch wins; extra fingers do nothing
-        activePointer = { id: e.pointerId, card, x: e.clientX, y: e.clientY };
-      });
-
-      card.addEventListener('pointerup', e => {
-        if (!activePointer || e.pointerId !== activePointer.id) return;
-        const a = activePointer;
-        activePointer = null;
-        if (!state || state.locked) return;
-        if (card !== a.card) return; // finger wandered to the other photo: not a tap
-        const dx = e.clientX - a.x;
-        const dy = e.clientY - a.y;
-        if (Math.hypot(dx, dy) > TAP_MAX_TRAVEL_PX) return; // a drag, not a tap
-        namePair(card);
-      });
-
-      card.addEventListener('pointercancel', e => {
-        if (activePointer && e.pointerId === activePointer.id) activePointer = null;
-      });
+    screen.addEventListener('pointerdown', e => {
+      if (!state || state.mode !== 'pair' || state.locked) return;
+      if (activePointer !== null) return; // first touch wins; extra fingers do nothing
+      activePointer = { id: e.pointerId, card: cardOf(e.target), x: e.clientX, y: e.clientY };
     });
 
-    // A finger that lands on a photo but lifts on dead space is nothing.
-    document.addEventListener('pointerup', e => {
+    screen.addEventListener('pointerup', e => {
+      if (!activePointer || e.pointerId !== activePointer.id) return;
+      const a = activePointer;
+      activePointer = null;
+      if (!state || state.mode !== 'pair' || state.locked) return;
+      const travel = Math.hypot(e.clientX - a.x, e.clientY - a.y);
+      if (travel > TAP_MAX_TRAVEL_PX) { nextPair(); return; } // a swipe: next two
+      const card = cardOf(e.target);
+      if (!card || card !== a.card) return; // lifted on dead space or the other photo: not a tap
+      namePair(card);
+    });
+
+    screen.addEventListener('pointercancel', e => {
       if (activePointer && e.pointerId === activePointer.id) activePointer = null;
     });
   }
@@ -280,11 +288,10 @@ window.FWSession = (function () {
       drag.span = (drag.axis === 'x' ? r.width : r.height) * (1 + NEXT_GAP);
     }
     const off = drag.axis === 'x' ? dx : dy;
-    const dir = off < 0 ? 1 : -1; // finger left/up = forward through the ring, right/down = back
+    const dir = off < 0 ? 1 : -1; // only which side the next photo waits on: the side he pulls from
     if (dir !== drag.dir) {
       drag.dir = dir;
-      setSlide(inc, ringIndex(state.index + dir));
-      inc.hidden = false;
+      if (inc.hidden) { setSlide(inc, ringIndex(state.index + 1)); inc.hidden = false; } // always the next word
     }
     drag.off = off;
     place(cur, drag.axis, off, false);
@@ -330,7 +337,7 @@ window.FWSession = (function () {
     cur = inc;
     inc = old;
     inc.hidden = true;
-    state.index = ringIndex(state.index + d.dir);
+    state.index = ringIndex(state.index + 1); // any direction = forward
     await speak(state.words[state.index]);
   }
 

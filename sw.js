@@ -1,15 +1,16 @@
 /* Offline support: network first (so updates arrive), cache as fallback. */
 
-const CACHE = 'firstwords-v8';
+const V = '11';                 // keep in step with APP_VERSION in app.js and ?v= in index.html
+const CACHE = 'firstwords-v' + V;
 const ASSETS = [
   '.',
   'index.html',
-  'style.css',
+  'style.css?v=' + V,
   'manifest.webmanifest',
-  'js/db.js',
-  'js/session.js',
-  'js/parent.js',
-  'js/app.js',
+  'js/db.js?v=' + V,
+  'js/session.js?v=' + V,
+  'js/parent.js?v=' + V,
+  'js/app.js?v=' + V,
   'icons/icon-192.png',
   'icons/icon-512.png'
 ];

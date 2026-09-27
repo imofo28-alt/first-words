@@ -171,6 +171,8 @@ body {
   margin: 0 auto 16px;
 }
 .end-inner p { font-family: Georgia, serif; font-size: 18px; margin: 0; }
+.end-home { margin-top: 28px; }
+.head-actions { display: flex; gap: 8px; align-items: center; }
 
 /* ---------- Parent area ---------- */
 

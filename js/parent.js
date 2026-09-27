@@ -710,11 +710,13 @@ window.FWParent = (function () {
     document.querySelectorAll('input[name="session-mode"]').forEach(r => {
       r.addEventListener('change', () => { if (r.checked) FWDB.setSetting('sessionMode', r.value); });
     });
-    $('btn-to-start').addEventListener('click', async () => {
+    const goHome = async () => {
       await closeFlow(true);
       hideForm();
       FWApp.show('start');
-    });
+    };
+    $('btn-to-start').addEventListener('click', goHome);
+    $('btn-home').addEventListener('click', goHome);
   }
 
   document.addEventListener('DOMContentLoaded', wire);
