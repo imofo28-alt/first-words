@@ -19,7 +19,7 @@ window.FWApp = (function () {
     const btn = document.getElementById('btn-start');
     const msg = document.getElementById('start-msg');
     const topicLine = document.getElementById('start-topic');
-    topicLine.textContent = topic ? 'Topic: ' + topic : '';
+    topicLine.textContent = topic;
     topicLine.hidden = !topic;
     if (ready.length < 2) {
       btn.disabled = true;

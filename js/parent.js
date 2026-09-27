@@ -54,7 +54,7 @@ window.FWParent = (function () {
     if (reason === 'need-words') {
       note('A session needs at least two words in rotation in the chosen topic, each with a photo and your voice.');
     } else if (reason === 'welcome') {
-      note('Welcome! Add his first words below — a photo of the real thing and your voice for each. Two words are enough to start.');
+      note('Welcome! Add a pack below, then tap “● Record” on a few words and say each one in your own voice.');
     } else {
       note('');
     }

@@ -56,7 +56,7 @@ body {
   font-weight: 700;
   margin: 0 0 6px;
 }
-.adult-line { color: var(--muted); margin: 0 0 36px; }
+.adult-line { color: var(--muted); font-size: 15px; margin: 28px 0 0; }
 .big-btn {
   font: inherit;
   font-size: 22px;
@@ -71,8 +71,9 @@ body {
 .big-btn:disabled { background: var(--surface-2); color: var(--muted); cursor: default; }
 .big-btn:focus-visible, .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .start-msg { color: var(--rust); margin: 18px 0 0; }
-.start-topic { color: var(--muted); margin: 14px 0 0; font-size: 15px; }
-.hint { color: var(--muted); font-size: 14px; margin-top: 48px; }
+.start-topic { color: var(--muted); margin: 0 0 30px; font-size: 18px; }
+.start-inner h1 + .big-btn { margin-top: 30px; }
+.hint { color: var(--muted); font-size: 13px; margin-top: 44px; }
 
 /* ---------- Child session ---------- */
 
@@ -203,10 +204,14 @@ body {
 }
 
 .p-block {
-  margin-top: 36px;
+  margin-top: 30px;
   border-top: 1px solid var(--line);
-  padding-top: 22px;
+  padding-top: 20px;
 }
+.settings-grid { display: flex; flex-wrap: wrap; gap: 20px 32px; }
+.settings-grid > div { min-width: 220px; }
+details.sub { margin-top: 16px; }
+details.sub summary { font-weight: 600; font-size: 15px; color: var(--muted); }
 .p-block h3 { font-size: 19px; margin: 0 0 12px; }
 .p-block-head {
   display: flex;

@@ -19,11 +19,11 @@
 <section id="screen-start" class="screen">
   <div class="start-inner">
     <h1>First Words</h1>
-    <p class="adult-line" id="start-line">TV off? Sit with him — you say the word too.</p>
+    <p class="start-topic" id="start-topic" hidden></p>
     <button id="btn-start" class="big-btn">Start</button>
     <p class="start-msg" id="start-msg" hidden></p>
-    <p class="start-topic" id="start-topic" hidden></p>
-    <p class="hint">Parents: press and hold with <strong>two fingers</strong> to open the parent area.</p>
+    <p class="adult-line" id="start-line">Sit with him and say the word too.</p>
+    <p class="hint">Parents: hold two fingers on the screen.</p>
   </div>
 </section>
 
@@ -66,18 +66,18 @@
       <form id="word-form" hidden>
         <div class="form-grid">
           <div>
-            <label class="f-label" for="f-photo">Photo of the real thing</label>
+            <label class="f-label" for="f-photo">Photo</label>
             <input type="file" id="f-photo" accept="image/*">
             <div id="photo-preview" class="photo-preview" hidden></div>
-            <p class="tip">One object, plain background, filling the frame. His actual ball, his actual duck.</p>
+            <p class="tip">One real thing, plain background, filling the frame.</p>
           </div>
           <div>
-            <label class="f-label" for="f-word">The word</label>
+            <label class="f-label" for="f-word">Word</label>
             <input type="text" id="f-word" maxlength="30" autocomplete="off" placeholder="ball">
             <label class="f-label gap" for="f-topic">Topic</label>
-            <input type="text" id="f-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="e.g. Fruits, Family">
+            <input type="text" id="f-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="Fruits">
             <p class="f-label gap">Your voice</p>
-            <p class="tip coach">Say it like you’d say it to him — slow, warm, sing-song. Say it <strong>twice</strong>: “Ball! … Ball.”</p>
+            <p class="tip coach">Slow, warm, twice: “Ball! … Ball.”</p>
             <div class="rec-row">
               <button type="button" id="btn-rec" class="btn">● Record</button>
               <span id="rec-time" class="rec-time"></span>
@@ -96,86 +96,79 @@
     </section>
 
     <section class="p-block">
-      <h3>Add many at once</h3>
-      <p class="f-label">Packs published with the app</p>
+      <h3>Packs</h3>
+      <p class="tip">A topic of pictures, ready to add. You record the voice for each word.</p>
       <ul id="packs-list" class="word-list"></ul>
       <p id="packs-msg" class="tip" hidden></p>
-      <p class="f-label gap">From your own files</p>
-      <p class="tip">Name each file after the word: <em>apple.jpg</em> and <em>apple.m4a</em> become one word with photo and voice. Photos alone are fine — record the voice here later, or import the recordings another day and they attach themselves to the matching words.</p>
-      <div class="import-row">
-        <input type="text" id="f-import-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="Topic, e.g. Family">
-        <input type="file" id="f-import-files" multiple accept="image/*,audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.jpg,.jpeg,.png,.webp,.heic">
-        <button type="button" id="btn-import" class="btn primary">Import</button>
-      </div>
-      <p id="import-msg" class="tip" hidden></p>
+      <details class="sub">
+        <summary>Import your own photos and recordings</summary>
+        <p class="tip">Name each file after the word — <em>apple.jpg</em>, <em>apple.m4a</em> — choose them all, and tap Import. Recordings added later attach to the matching words.</p>
+        <div class="import-row">
+          <input type="text" id="f-import-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="Topic">
+          <input type="file" id="f-import-files" multiple accept="image/*,audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.jpg,.jpeg,.png,.webp,.heic">
+          <button type="button" id="btn-import" class="btn primary">Import</button>
+        </div>
+        <p id="import-msg" class="tip" hidden></p>
+      </details>
     </section>
 
     <section class="p-block">
       <h3>Session</h3>
-      <div id="session-topic-row" hidden>
-        <label class="f-label" for="f-topic-session">Topic for sessions</label>
-        <select id="f-topic-session"><option value="">Any topic</option></select>
-        <p class="tip">Sessions draw from the words in rotation in this topic. Keep 3–6 in rotation there; switch topics whenever you like.</p>
+      <div class="settings-grid">
+        <div id="session-topic-row" hidden>
+          <label class="f-label" for="f-topic-session">Topic</label>
+          <select id="f-topic-session"><option value="">Any topic</option></select>
+        </div>
+        <div>
+          <label class="f-label" for="f-taps">Ends after</label>
+          <select id="f-taps">
+            <option value="0" selected>Keep going until you stop it</option>
+            <option value="4">4 words</option>
+            <option value="6">6 words</option>
+            <option value="8">8 words</option>
+            <option value="10">10 words</option>
+          </select>
+        </div>
       </div>
       <p class="f-label gap">How he moves between pictures</p>
       <div class="mode-opts">
         <label class="mode-opt">
           <input type="radio" name="session-mode" value="swipe">
-          <span><strong>Swipe.</strong> One picture. He swipes any way he likes and the next picture follows his finger in from that side. Swiping back brings the last one again; a tap on the picture says it again.</span>
+          <span><strong>Swipe</strong> — one picture; he swipes to the next, taps to hear it again</span>
         </label>
         <label class="mode-opt">
           <input type="radio" name="session-mode" value="pair">
-          <span><strong>Tap.</strong> Two pictures side by side. He taps one, it grows and is named.</span>
+          <span><strong>Tap</strong> — two pictures; he taps one</span>
         </label>
       </div>
-      <label class="f-label gap" for="f-taps">Naming moments per session</label>
-      <select id="f-taps">
-        <option value="0" selected>Keep going until you stop it</option>
-        <option value="4">4, then it ends by itself</option>
-        <option value="6">6, then it ends by itself</option>
-        <option value="8">8, then it ends by itself</option>
-        <option value="10">10, then it ends by itself</option>
-      </select>
-      <p class="tip">With “Keep going”, the pictures loop round until you open the parent area (two-finger hold) or put the iPad away. Each session uses the least-recently practised words (up to six when swiping, two when tapping). Short and daily beats long and rare.</p>
+      <p class="tip">Keep 3–6 words in rotation per topic. Short and daily beats long and rare. To stop a “keep going” session, hold two fingers on the screen.</p>
     </section>
 
     <section class="p-block">
       <h3>Help</h3>
       <details>
-        <summary>How to use it with him</summary>
+        <summary>Using it with him</summary>
         <ul>
-          <li>Always together, on your lap — the app is a picture book, you are the teacher.</li>
-          <li>He swipes to the next picture, or taps the one he likes; the app says the word in your voice. There is no wrong answer.</li>
-          <li>In the two seconds of silence after the word: you say it too, warmly. That pause is for you both.</li>
-          <li>Afterwards, find the real thing: “Look — your <em>ball</em>! Same!” That bridge is what makes it stick.</li>
-          <li>Tick “He says it” once he uses a word in real life — check the day <em>after</em> a session, away from the iPad.</li>
+          <li>Together, on your lap. The app is a picture book; you are the teacher.</li>
+          <li>He swipes or taps; the app says the word in your voice. There are no wrong answers.</li>
+          <li>In the pause after the word, say it too. Afterwards, find the real thing: “Your ball! Same!”</li>
+          <li>Tick “He says it” once he uses a word away from the iPad.</li>
         </ul>
       </details>
       <details>
-        <summary>Preparing photos and recordings on your computer</summary>
+        <summary>Adding words</summary>
         <ul>
-          <li>Make one folder per topic (Fruits, Cars, Family). Inside, name every file after the word: <em>apple.jpg</em>, <em>apple.m4a</em>.</li>
-          <li>Photos: jpg or png, one real object, plain background. Recordings: the Windows Sound Recorder app saves m4a files that play here; say the word twice, warm and slow.</li>
-          <li>Put the folder somewhere the iPad can see it — iCloud Drive, OneDrive or Google Drive — then, in <strong>From your own files</strong> above, choose all the files in that folder and tap Import.</li>
-          <li>Recordings can come later: import them into the same topic and they attach to the matching words.</li>
-          <li>Packs published with the app are on the public internet. Family photos and your voice never go in a pack — always use <strong>From your own files</strong> for those.</li>
+          <li>Packs: tap “Add to his words”, then “● Record” on each word (say it twice, slow and warm), and tick “In rotation” on 3–6 of them.</li>
+          <li>One word at a time: “+ Add a word” with a photo of the real thing.</li>
+          <li>Packs are on the public internet. Keep family photos out of them.</li>
         </ul>
       </details>
       <details>
-        <summary>Putting it on the iPad</summary>
+        <summary>On the iPad</summary>
         <ul>
-          <li>On the iPad, open the app’s address in Safari, tap the <strong>Share</strong> button, then <strong>Add to Home Screen</strong>. It then opens full-screen like a normal app and works offline.</li>
-          <li>Your photos, recordings and word list live <strong>only on the device itself</strong> — nothing is uploaded anywhere.</li>
-          <li>Record your voice on the iPad itself (recording needs the secure HTTPS address).</li>
-        </ul>
-      </details>
-      <details>
-        <summary>Locking the iPad to this app (Guided Access)</summary>
-        <ul>
-          <li>Settings → Accessibility → <strong>Guided Access</strong> → turn on, set a passcode.</li>
-          <li>Open First Words, then <strong>triple-click the top button</strong> and tap Start.</li>
-          <li>The iPad now stays in this app: home gesture and buttons do nothing.</li>
-          <li>To leave: triple-click again and enter your passcode. You can also set a time limit in the Guided Access options.</li>
+          <li>Open the app’s address in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It works offline after that.</li>
+          <li>Photos, recordings and the word list stay on the iPad only.</li>
+          <li>To lock the iPad to this app: Settings → Accessibility → <strong>Guided Access</strong>, then triple-click the top button while in the app.</li>
         </ul>
       </details>
     </section>

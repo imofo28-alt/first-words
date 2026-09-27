@@ -1,0 +1,56 @@
+{
+ "id": "colors",
+ "name": "Colors",
+ "words": [
+  {
+   "label": "black",
+   "photo": "black.jpg",
+   "audio": null
+  },
+  {
+   "label": "blue",
+   "photo": "blue.jpg",
+   "audio": null
+  },
+  {
+   "label": "brown",
+   "photo": "brown.jpg",
+   "audio": null
+  },
+  {
+   "label": "green",
+   "photo": "green.jpg",
+   "audio": null
+  },
+  {
+   "label": "orange",
+   "photo": "orange.jpg",
+   "audio": null
+  },
+  {
+   "label": "pink",
+   "photo": "pink.jpg",
+   "audio": null
+  },
+  {
+   "label": "purple",
+   "photo": "purple.jpg",
+   "audio": null
+  },
+  {
+   "label": "red",
+   "photo": "red.jpg",
+   "audio": null
+  },
+  {
+   "label": "white",
+   "photo": "white.jpg",
+   "audio": null
+  },
+  {
+   "label": "yellow",
+   "photo": "yellow.jpg",
+   "audio": null
+  }
+ ]
+}

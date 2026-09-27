@@ -1,0 +1,51 @@
+{
+ "id": "shapes",
+ "name": "Shapes",
+ "words": [
+  {
+   "label": "circle",
+   "photo": "circle.jpg",
+   "audio": null
+  },
+  {
+   "label": "diamond",
+   "photo": "diamond.jpg",
+   "audio": null
+  },
+  {
+   "label": "heart",
+   "photo": "heart.jpg",
+   "audio": null
+  },
+  {
+   "label": "moon",
+   "photo": "moon.jpg",
+   "audio": null
+  },
+  {
+   "label": "oval",
+   "photo": "oval.jpg",
+   "audio": null
+  },
+  {
+   "label": "rectangle",
+   "photo": "rectangle.jpg",
+   "audio": null
+  },
+  {
+   "label": "square",
+   "photo": "square.jpg",
+   "audio": null
+  },
+  {
+   "label": "star",
+   "photo": "star.jpg",
+   "audio": null
+  },
+  {
+   "label": "triangle",
+   "photo": "triangle.jpg",
+   "audio": null
+  }
+ ]
+}

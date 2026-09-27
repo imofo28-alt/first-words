@@ -1,9 +1,21 @@
 {
  "packs": [
   {
+   "id": "colors",
+   "name": "Colors",
+   "words": 10,
+   "recordings": 0
+  },
+  {
    "id": "fruits",
    "name": "Fruits",
    "words": 10,
+   "recordings": 0
+  },
+  {
+   "id": "shapes",
+   "name": "Shapes",
+   "words": 9,
    "recordings": 0
   }
  ]
