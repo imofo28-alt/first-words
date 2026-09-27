@@ -22,6 +22,7 @@
     <p class="adult-line" id="start-line">TV off? Sit with him — you say the word too.</p>
     <button id="btn-start" class="big-btn">Start</button>
     <p class="start-msg" id="start-msg" hidden></p>
+    <p class="start-topic" id="start-topic" hidden></p>
     <p class="hint">Parents: press and hold with <strong>two fingers</strong> to open the parent area.</p>
   </div>
 </section>
@@ -54,6 +55,7 @@
       <button id="btn-to-start" class="btn primary">Start a session</button>
     </header>
     <p class="parent-note" id="parent-note" hidden></p>
+    <datalist id="topic-list"></datalist>
 
     <section class="p-block">
       <div class="p-block-head">
@@ -72,7 +74,9 @@
           <div>
             <label class="f-label" for="f-word">The word</label>
             <input type="text" id="f-word" maxlength="30" autocomplete="off" placeholder="ball">
-            <p class="f-label" style="margin-top:18px">Your voice</p>
+            <label class="f-label gap" for="f-topic">Topic</label>
+            <input type="text" id="f-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="e.g. Fruits, Family">
+            <p class="f-label gap">Your voice</p>
             <p class="tip coach">Say it like you’d say it to him — slow, warm, sing-song. Say it <strong>twice</strong>: “Ball! … Ball.”</p>
             <div class="rec-row">
               <button type="button" id="btn-rec" class="btn">● Record</button>
@@ -92,8 +96,28 @@
     </section>
 
     <section class="p-block">
+      <h3>Add many at once</h3>
+      <p class="f-label">Packs published with the app</p>
+      <ul id="packs-list" class="word-list"></ul>
+      <p id="packs-msg" class="tip" hidden></p>
+      <p class="f-label gap">From your own files</p>
+      <p class="tip">Name each file after the word: <em>apple.jpg</em> and <em>apple.m4a</em> become one word with photo and voice. Photos alone are fine — record the voice here later, or import the recordings another day and they attach themselves to the matching words.</p>
+      <div class="import-row">
+        <input type="text" id="f-import-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="Topic, e.g. Family">
+        <input type="file" id="f-import-files" multiple accept="image/*,audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.jpg,.jpeg,.png,.webp,.heic">
+        <button type="button" id="btn-import" class="btn primary">Import</button>
+      </div>
+      <p id="import-msg" class="tip" hidden></p>
+    </section>
+
+    <section class="p-block">
       <h3>Session</h3>
-      <p class="f-label">How he moves between pictures</p>
+      <div id="session-topic-row" hidden>
+        <label class="f-label" for="f-topic-session">Topic for sessions</label>
+        <select id="f-topic-session"><option value="">Any topic</option></select>
+        <p class="tip">Sessions draw from the words in rotation in this topic. Keep 3–6 in rotation there; switch topics whenever you like.</p>
+      </div>
+      <p class="f-label gap">How he moves between pictures</p>
       <div class="mode-opts">
         <label class="mode-opt">
           <input type="radio" name="session-mode" value="swipe">
@@ -127,10 +151,19 @@
         </ul>
       </details>
       <details>
+        <summary>Preparing photos and recordings on your computer</summary>
+        <ul>
+          <li>Make one folder per topic (Fruits, Cars, Family). Inside, name every file after the word: <em>apple.jpg</em>, <em>apple.m4a</em>.</li>
+          <li>Photos: jpg or png, one real object, plain background. Recordings: the Windows Sound Recorder app saves m4a files that play here; say the word twice, warm and slow.</li>
+          <li>Put the folder somewhere the iPad can see it — iCloud Drive, OneDrive or Google Drive — then, in <strong>From your own files</strong> above, choose all the files in that folder and tap Import.</li>
+          <li>Recordings can come later: import them into the same topic and they attach to the matching words.</li>
+          <li>Packs published with the app are on the public internet. Family photos and your voice never go in a pack — always use <strong>From your own files</strong> for those.</li>
+        </ul>
+      </details>
+      <details>
         <summary>Putting it on the iPad</summary>
         <ul>
-          <li>The app needs to be reachable over the internet (HTTPS) for the iPad — free options like GitHub Pages or Netlify work. Ask Claude to set this up when you’re ready.</li>
-          <li>On the iPad, open the address in Safari, tap the <strong>Share</strong> button, then <strong>Add to Home Screen</strong>. It then opens full-screen like a normal app and works offline.</li>
+          <li>On the iPad, open the app’s address in Safari, tap the <strong>Share</strong> button, then <strong>Add to Home Screen</strong>. It then opens full-screen like a normal app and works offline.</li>
           <li>Your photos, recordings and word list live <strong>only on the device itself</strong> — nothing is uploaded anywhere.</li>
           <li>Record your voice on the iPad itself (recording needs the secure HTTPS address).</li>
         </ul>

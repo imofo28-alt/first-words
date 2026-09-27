@@ -1,0 +1,66 @@
+{
+ "id": "fruits",
+ "name": "Fruits",
+ "words": [
+  {
+   "label": "apple",
+   "photo": "apple.jpg",
+   "audio": null,
+   "credit": "unknown photographer via rawpixel (CC0 / public domain) - https://www.rawpixel.com/image/6041916/photo-image-background-public-domain-fruit"
+  },
+  {
+   "label": "banana",
+   "photo": "banana.jpg",
+   "audio": null,
+   "credit": "unknown photographer via rawpixel (CC0 / public domain) - https://www.rawpixel.com/image/5902531/free-banana-image-public-domain-fruit-cc0-photo"
+  },
+  {
+   "label": "grapes",
+   "photo": "grapes.jpg",
+   "audio": null,
+   "credit": "U.S. Department of Agriculture via rawpixel (CC0 / public domain) - https://www.rawpixel.com/image/8733852/photo-image-white-background-public-domain-food"
+  },
+  {
+   "label": "lemon",
+   "photo": "lemon.jpg",
+   "audio": null,
+   "credit": "unknown photographer via rawpixel (CC0 / public domain) - https://www.rawpixel.com/image/5913170/free-lemon-image-public-domain-fruit-cc0-photo"
+  },
+  {
+   "label": "mango",
+   "photo": "mango.jpg",
+   "audio": null,
+   "credit": "unknown photographer via rawpixel (CC0 / public domain) - https://www.rawpixel.com/image/6035201/photo-image-background-public-domain-leaf"
+  },
+  {
+   "label": "orange",
+   "photo": "orange.jpg",
+   "audio": null,
+   "credit": "Agnieszka Bladzik via stocksnap (CC0 / public domain) - https://stocksnap.io/photo/oranges-fruits-WY1RMUVYDA"
+  },
+  {
+   "label": "peach",
+   "photo": "peach.jpg",
+   "audio": null,
+   "credit": "personalgraphic.official via flickr (CC0 / public domain) - https://www.flickr.com/photos/198895458@N04/53097227971"
+  },
+  {
+   "label": "pear",
+   "photo": "pear.jpg",
+   "audio": null,
+   "credit": "unknown photographer via rawpixel (CC0 / public domain) - https://www.rawpixel.com/image/6020410/photo-image-background-public-domain-green"
+  },
+  {
+   "label": "strawberry",
+   "photo": "strawberry.jpg",
+   "audio": null,
+   "credit": "unknown photographer via rawpixel (CC0 / public domain) - https://www.rawpixel.com/image/6031439/photo-image-background-public-domain-plant"
+  },
+  {
+   "label": "watermelon",
+   "photo": "watermelon.jpg",
+   "audio": null,
+   "credit": "vtc160094694 via flickr (CC0 / public domain) - https://www.flickr.com/photos/154960850@N02/40041737880"
+  }
+ ]
+}

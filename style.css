@@ -71,6 +71,7 @@ body {
 .big-btn:disabled { background: var(--surface-2); color: var(--muted); cursor: default; }
 .big-btn:focus-visible, .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .start-msg { color: var(--rust); margin: 18px 0 0; }
+.start-topic { color: var(--muted); margin: 14px 0 0; font-size: 15px; }
 .hint { color: var(--muted); font-size: 14px; margin-top: 48px; }
 
 /* ---------- Child session ---------- */
@@ -257,7 +258,7 @@ body {
   max-width: 560px;
 }
 .mode-opt input { width: 18px; height: 18px; margin-top: 3px; flex-shrink: 0; accent-color: var(--accent); }
-#word-form input[type="text"], #f-taps {
+#word-form input[type="text"], #f-taps, #f-topic-session, .import-row input[type="text"] {
   font: inherit;
   width: 100%;
   max-width: 260px;
@@ -282,6 +283,31 @@ body {
 .rec-time { color: var(--rust); font-weight: 700; min-width: 46px; }
 .form-msg { color: var(--rust); margin: 14px 0 0; }
 .form-actions { display: flex; gap: 10px; margin-top: 18px; }
+
+/* Topics, packs, file import */
+.topic-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 -2px;
+  padding: 0 2px;
+}
+.topic-head:first-child { margin-top: 0; }
+.topic-head strong { font-size: 16px; }
+.pack-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+.import-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+.import-row input[type="text"] { max-width: 220px; }
+.import-row input[type="file"] { font: inherit; font-size: 14px; max-width: 100%; }
 
 /* Word list */
 .word-list { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }

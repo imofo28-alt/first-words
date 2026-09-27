@@ -1,0 +1,10 @@
+{
+ "packs": [
+  {
+   "id": "fruits",
+   "name": "Fruits",
+   "words": 10,
+   "recordings": 0
+  }
+ ]
+}

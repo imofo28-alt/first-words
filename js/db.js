@@ -1,11 +1,13 @@
 /* Local storage for words and settings. Everything lives on the device (IndexedDB);
    nothing is ever uploaded. Word shape:
-   { id, label, photo (Blob), audio (Blob), active, saysIt, saysItAt,
-     timesNamed, lastPracticedAt, createdAt } */
+   { id, label, topic, photo (Blob), audio (Blob), active, saysIt, saysItAt,
+     timesNamed, lastPracticedAt, createdAt }
+   Settings: tapsPerSession, sessionMode ('swipe' | 'pair'), currentTopic. */
 
 window.FWDB = (function () {
   const DB_NAME = 'firstwords';
   const DB_VERSION = 1;
+  const DEFAULT_TOPIC = 'General'; // words saved before topics existed live here
   let dbPromise = null;
 
   function open() {
@@ -81,5 +83,27 @@ window.FWDB = (function () {
     });
   }
 
-  return { allWords, getWord, putWord, deleteWord, getSetting, setSetting };
+  /* ---------- topics and what a session may use ---------- */
+
+  function topicOf(w) { return ((w && w.topic) || '').trim() || DEFAULT_TOPIC; }
+
+  // In rotation, has a photo and the parent's voice, and he doesn't say it yet.
+  function isReady(w) { return !!(w && w.active && w.photo && w.audio && !w.saysIt); }
+
+  async function topics() {
+    const words = await allWords();
+    return Array.from(new Set(words.map(topicOf))).sort((a, b) => a.localeCompare(b));
+  }
+
+  // The words a session draws from: the ready words inside the chosen topic.
+  // No topic chosen → ready words from any topic.
+  async function sessionWords() {
+    const words = await allWords();
+    const topic = ((await getSetting('currentTopic', '')) || '').trim();
+    const ready = words.filter(isReady);
+    return { topic, words: topic ? ready.filter(w => topicOf(w) === topic) : ready };
+  }
+
+  return { allWords, getWord, putWord, deleteWord, getSetting, setSetting,
+           DEFAULT_TOPIC, topicOf, isReady, topics, sessionWords };
 })();

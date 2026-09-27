@@ -36,8 +36,7 @@ window.FWSession = (function () {
   function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   async function begin() {
-    const words = await FWDB.allWords();
-    const ready = words.filter(w => w.active && w.photo && w.audio && !w.saysIt);
+    const ready = (await FWDB.sessionWords()).words; // in rotation, inside the chosen topic
     if (ready.length < 2) {
       FWParent.open('need-words');
       return;

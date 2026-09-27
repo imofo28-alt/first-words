@@ -15,13 +15,17 @@ window.FWApp = (function () {
   }
 
   async function refreshStart() {
-    const words = await FWDB.allWords();
-    const ready = words.filter(w => w.active && w.photo && w.audio && !w.saysIt);
+    const { topic, words: ready } = await FWDB.sessionWords();
     const btn = document.getElementById('btn-start');
     const msg = document.getElementById('start-msg');
+    const topicLine = document.getElementById('start-topic');
+    topicLine.textContent = topic ? 'Topic: ' + topic : '';
+    topicLine.hidden = !topic;
     if (ready.length < 2) {
       btn.disabled = true;
-      msg.textContent = 'Add at least two words in the parent area first (hold two fingers on the screen).';
+      msg.textContent = topic
+        ? 'Put at least two words with a photo and your voice in rotation under “' + topic + '”, or choose another topic (hold two fingers on the screen).'
+        : 'Add at least two words in the parent area first (hold two fingers on the screen).';
       msg.hidden = false;
     } else {
       btn.disabled = false;
