@@ -1,286 +1,579 @@
-/* The parent area: build the word library (photo + your recorded voice), keep it in
-   topics, choose what's in rotation, log "he says it now", set session length and the
-   topic sessions draw from, and add many words at once — from packs published with
-   the app, or from your own photo + recording files. Opens only via the two-finger
-   long-press (see app.js). */
+/* The parent area, built around the parent's three jobs:
+     1. pick a topic (tabs)
+     2. get its words ready — pictures plus the parent's own voice
+     3. start
+   One topic shows at a time. Every word is a card with one clear state:
+     Practising (in the session) · Needs your voice · Resting · He says it.
+   A word that gets a voice joins the practice set by itself while there is room (the
+   research cap is six per topic); tapping a card's picture rests or resumes it.
+   "Record voices" walks through the words that still need a voice, one at a time.
+   Opens only via the two-finger long-press (see app.js). */
 
 window.FWParent = (function () {
-  const MAX_ACTIVE = 6; // the research cap on the active set — per topic; a session uses one topic
+  const MAX_ACTIVE = 6; // the research cap on the active set, per topic
   const AUDIO_EXT = { m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac', mp3: 'audio/mpeg', wav: 'audio/wav', webm: 'audio/webm', ogg: 'audio/ogg', oga: 'audio/ogg', caf: 'audio/x-caf' };
   const IMAGE_EXT = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', gif: 'image/gif' };
-
-  let objectUrls = [];
-  let editingId = null;
-  let photoBlob = null;   // processed photo for the form
-  let recBlob = null;     // recorded audio for the form
-  let mediaRecorder = null;
-  let recChunks = [];
-  let recTimer = null;
-  let recStartedAt = 0;
-  let lastTopic = '';     // the topic the form defaults to
-  const previewAudio = new Audio();
 
   const $ = id => document.getElementById(id);
   const topicOf = w => FWDB.topicOf(w);
 
-  function revokeAll() {
-    objectUrls.forEach(u => URL.revokeObjectURL(u));
-    objectUrls = [];
-  }
-  function track(url) { objectUrls.push(url); return url; }
+  let words = [];         // fresh after every change
+  let topic = '';         // the selected tab
+  let view = 'topic';     // 'topic' | 'add'
+  let objectUrls = [];
+  let packs = null;       // packs/index.json, once fetched
+  let packsError = false;
+  const previewAudio = new Audio();
 
-  function note(text) {
-    const el = $('parent-note');
-    el.textContent = text || '';
-    el.hidden = !text;
+  // add/edit form
+  let editingId = null;
+  let photoBlob = null;
+  let recBlob = null;
+
+  // guided recording
+  let recQueue = [];
+  let recCurrent = null;
+  let recTaken = null;
+
+  const recorder = makeRecorder();
+  let timer = null;
+
+  /* ---------- small helpers ---------- */
+
+  function revokeAll() { objectUrls.forEach(u => URL.revokeObjectURL(u)); objectUrls = []; }
+  function track(url) { objectUrls.push(url); return url; }
+  function say(id, text) { const e = $(id); e.textContent = text || ''; e.hidden = !text; }
+  function note(text) { say('parent-note', text); }
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function stateOf(w) {
+    if (w.saysIt) return 'says';
+    if (!w.audio) return 'needs-voice';
+    return w.active ? 'practising' : 'resting';
   }
-  function formMsg(text) {
-    const el = $('form-msg');
-    el.textContent = text || '';
-    el.hidden = !text;
+  const STATE_LABEL = { says: 'He says it', 'needs-voice': 'Needs your voice', practising: 'Practising', resting: 'Resting' };
+
+  function inTopic(t) { return words.filter(w => topicOf(w) === t); }
+  function practisingCount(t) { return inTopic(t).filter(w => w.active && !w.saysIt).length; }
+  function topics() { return Array.from(new Set(words.map(topicOf))).sort((a, b) => a.localeCompare(b)); }
+
+  // A word with a voice joins the practice set while there is room.
+  function activateIfRoom(w) {
+    if (w.saysIt || !w.audio || w.active) return;
+    if (practisingCount(topicOf(w)) < MAX_ACTIVE) w.active = true;
   }
-  function say(id, text) {
-    const el = $(id);
-    el.textContent = text || '';
-    el.hidden = !text;
+
+  async function refresh() { words = await FWDB.allWords(); }
+
+  function startTimer(elId) {
+    const started = Date.now();
+    stopTimer();
+    $(elId).textContent = '0.0 s';
+    timer = setInterval(() => { $(elId).textContent = ((Date.now() - started) / 1000).toFixed(1) + ' s'; }, 100);
   }
+  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+
+  function play(blob) {
+    previewAudio.src = track(URL.createObjectURL(blob));
+    previewAudio.play().catch(() => {});
+  }
+
+  /* ---------- the recorder ---------- */
+
+  function makeRecorder() {
+    let mr = null, chunks = [], stream = null, waiting = null;
+    return {
+      available() { return !!(navigator.mediaDevices && window.MediaRecorder); },
+      get recording() { return !!(mr && mr.state === 'recording'); },
+      async start() {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+        mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+        chunks = [];
+        mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+        mr.onstop = () => {
+          const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+          stream.getTracks().forEach(t => t.stop());
+          const done = waiting; waiting = null;
+          if (done) done(blob);
+        };
+        mr.start();
+      },
+      // Resolves with the recording once the browser has handed it over.
+      stop() {
+        if (!(mr && mr.state === 'recording')) return Promise.resolve(null);
+        return new Promise(resolve => {
+          waiting = resolve;
+          mr.stop();
+          setTimeout(() => { if (waiting === resolve) { waiting = null; resolve(new Blob(chunks, { type: mr.mimeType || 'audio/webm' })); } }, 3000);
+        });
+      }
+    };
+  }
+
+  /* ---------- open / render ---------- */
 
   async function open(reason) {
     FWSession.abort();
-    lastTopic = ((await FWDB.getSetting('currentTopic', '')) || '').trim();
-    await renderList();
-    await renderTopicControls();
+    await refresh();
+    const stored = ((await FWDB.getSetting('currentTopic', '')) || '').trim();
+    const names = topics();
+    topic = names.includes(stored) ? stored : (names[0] || '');
+    if (topic !== stored) await FWDB.setSetting('currentTopic', topic);
+    view = words.length ? 'topic' : 'add';
+    await closeFlow(true);
+    hideForm();
+    render();
     FWApp.show('parent');
-    if (reason === 'need-words') {
-      note('A session needs at least two words in rotation in the chosen topic, each with a photo and your voice.');
-    } else if (reason === 'welcome') {
-      note('Welcome! Add a pack below, then tap “● Record” on a few words and say each one in your own voice.');
-    } else {
-      note('');
-    }
-    const taps = await FWDB.getSetting('tapsPerSession', 0); // 0 = keep going
+    if (reason === 'need-words') note('Two words with your voice are enough to start. Tap “Record voices”.');
+    else if (reason === 'welcome') note('Welcome. Add a pack, then record your voice for a few of its words.');
+    else note('');
+    const taps = await FWDB.getSetting('tapsPerSession', 0);
     $('f-taps').value = String(taps);
     const mode = (await FWDB.getSetting('sessionMode', 'swipe')) === 'pair' ? 'pair' : 'swipe';
     const radio = document.querySelector('input[name="session-mode"][value="' + mode + '"]');
     if (radio) radio.checked = true;
-    loadPacks(); // online only; quietly explains itself when offline
+    if (packs === null) loadPacks();
   }
 
-  /* ---------- topics ---------- */
+  function render() {
+    revokeAll();
+    renderTabs();
+    $('topic-view').hidden = view !== 'topic';
+    $('add-view').hidden = view !== 'add';
+    if (view === 'topic') renderTopic(); else renderAdd();
+    renderStartButton();
+    renderDatalist();
+  }
 
-  async function renderTopicControls() {
-    const names = await FWDB.topics();
-    const current = ((await FWDB.getSetting('currentTopic', '')) || '').trim();
+  function renderTabs() {
+    const bar = $('topic-tabs');
+    bar.textContent = '';
+    topics().forEach(t => {
+      const b = el('button', 'tab' + (view === 'topic' && t === topic ? ' on' : ''), t);
+      b.type = 'button';
+      b.addEventListener('click', async () => {
+        topic = t; view = 'topic';
+        await FWDB.setSetting('currentTopic', t);
+        await closeFlow(true); hideForm(); note('');
+        render();
+      });
+      bar.appendChild(b);
+    });
+    const add = el('button', 'tab add' + (view === 'add' ? ' on' : ''), '+ Add');
+    add.type = 'button';
+    add.addEventListener('click', async () => { view = 'add'; await closeFlow(true); hideForm(); note(''); render(); });
+    bar.appendChild(add);
+  }
 
+  function renderDatalist() {
     const dl = $('topic-list');
     dl.textContent = '';
-    names.forEach(n => {
-      const o = document.createElement('option');
-      o.value = n;
-      dl.appendChild(o);
-    });
-
-    const sel = $('f-topic-session');
-    sel.textContent = '';
-    const any = document.createElement('option');
-    any.value = '';
-    any.textContent = 'Any topic';
-    sel.appendChild(any);
-    names.forEach(n => {
-      const o = document.createElement('option');
-      o.value = n;
-      o.textContent = n;
-      sel.appendChild(o);
-    });
-    sel.value = names.includes(current) ? current : '';
-    $('session-topic-row').hidden = names.length === 0;
+    topics().forEach(n => { const o = document.createElement('option'); o.value = n; dl.appendChild(o); });
   }
 
-  /* ---------- the word list, grouped by topic ---------- */
-
-  async function renderList() {
-    revokeAll();
-    const words = await FWDB.allWords();
-    words.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-
-    const activeCount = words.filter(w => w.active && !w.saysIt).length;
-    const saysCount = words.filter(w => w.saysIt).length;
-    $('word-counts').textContent =
-      words.length === 0 ? '' :
-      '— ' + words.length + ' word' + (words.length === 1 ? '' : 's') +
-      ', ' + activeCount + ' in rotation' +
-      (saysCount ? ', ' + saysCount + ' he says' : '');
-
-    const list = $('word-list');
-    list.textContent = '';
-
-    const groups = new Map();
-    for (const w of words) {
-      const t = topicOf(w);
-      if (!groups.has(t)) groups.set(t, []);
-      groups.get(t).push(w);
-    }
-    const names = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
-    const showHeads = names.length > 1 || (names.length === 1 && names[0] !== FWDB.DEFAULT_TOPIC);
-
-    for (const t of names) {
-      const ws = groups.get(t);
-      if (showHeads) {
-        const head = document.createElement('li');
-        head.className = 'topic-head';
-        const strong = document.createElement('strong');
-        strong.textContent = t;
-        const span = document.createElement('span');
-        span.className = 'count';
-        const act = ws.filter(w => w.active && !w.saysIt).length;
-        span.textContent = act + ' in rotation · ' + ws.length + ' word' + (ws.length === 1 ? '' : 's');
-        head.appendChild(strong);
-        head.appendChild(span);
-        list.appendChild(head);
-      }
-      for (const w of ws) list.appendChild(rowFor(w));
-    }
+  function renderStartButton() {
+    const btn = $('btn-to-start');
+    const ready = inTopic(topic).filter(FWDB.isReady).length;
+    btn.textContent = topic ? 'Start · ' + topic : 'Start';
+    btn.disabled = ready < 2;
+    btn.title = ready < 2 ? 'Record your voice for two words first' : '';
   }
 
-  function rowFor(w) {
-    const li = document.createElement('li');
-    li.className = 'word-row';
+  /* ---------- the topic view ---------- */
 
-    const img = document.createElement('img');
-    img.className = 'thumb';
+  function renderTopic() {
+    const ws = inTopic(topic);
+    const practising = ws.filter(w => w.active && !w.saysIt).length;
+    const needVoice = ws.filter(w => !w.audio && !w.saysIt);
+    const says = ws.filter(w => w.saysIt).length;
+
+    const bits = [practising + ' practising' + (practising ? ' of up to ' + MAX_ACTIVE : '')];
+    if (needVoice.length) bits.push(needVoice.length + ' need' + (needVoice.length === 1 ? 's' : '') + ' your voice');
+    if (says) bits.push(says + ' he says');
+    $('topic-summary').textContent = bits.join(' · ');
+
+    const ready = ws.filter(FWDB.isReady).length;
+    say('topic-hint', ready >= 2 ? '' : (ready === 0 ? 'Record your voice for two words and he can start.' : 'One more voice and he can start.'));
+
+    const recBtn = $('btn-record-all');
+    recBtn.hidden = needVoice.length === 0;
+    recBtn.textContent = '● Record voices (' + needVoice.length + ')';
+
+    const grid = $('word-grid');
+    grid.textContent = '';
+    ws.forEach(w => grid.appendChild(cardFor(w)));
+    const flowOpen = !$('rec-panel').hidden;
+    grid.hidden = flowOpen;
+    $('grid-legend').hidden = flowOpen;
+  }
+
+  function cardFor(w) {
+    const st = stateOf(w);
+    const li = el('li', 'wcard ' + st);
+
+    const pic = el('button', 'wphoto');
+    pic.type = 'button';
+    pic.setAttribute('aria-label', (st === 'practising' ? 'Rest ' : 'Practise ') + w.label);
+    const img = el('img');
     img.alt = '';
     if (w.photo) img.src = track(URL.createObjectURL(w.photo));
-    li.appendChild(img);
+    pic.appendChild(img);
+    pic.appendChild(el('span', 'wmark', st === 'practising' ? '✓' : (st === 'says' ? '★' : '')));
+    pic.addEventListener('click', () => togglePractising(w));
+    li.appendChild(pic);
 
-    const main = document.createElement('div');
-    main.className = 'w-main';
-    const strong = document.createElement('strong');
-    strong.textContent = w.label;
-    const meta = document.createElement('span');
-    meta.className = 'w-meta';
-    const bits = [];
-    if (w.timesNamed) bits.push('named ' + w.timesNamed + '×');
-    if (w.saysIt && w.saysItAt) bits.push('he says it since ' + new Date(w.saysItAt).toLocaleDateString());
-    if (!w.audio) bits.push('no recording yet');
-    meta.textContent = bits.join(' · ');
-    main.appendChild(strong);
-    main.appendChild(meta);
-    li.appendChild(main);
+    const body = el('div', 'wbody');
+    body.appendChild(el('div', 'wname', w.label));
+    body.appendChild(el('span', 'chip ' + st, STATE_LABEL[st]));
+    li.appendChild(body);
 
-    const activeLbl = document.createElement('label');
-    activeLbl.className = 'chk';
-    const activeCb = document.createElement('input');
-    activeCb.type = 'checkbox';
-    activeCb.checked = !!w.active;
-    activeCb.addEventListener('change', async () => {
-      if (activeCb.checked) {
-        const fresh = await FWDB.allWords();
-        const n = fresh.filter(x => x.active && !x.saysIt && x.id !== w.id && topicOf(x) === topicOf(w)).length;
-        if (n >= MAX_ACTIVE && !w.saysIt) {
-          activeCb.checked = false;
-          note('Keep it to ' + MAX_ACTIVE + ' words in rotation per topic — a one-year-old’s memory is the bottleneck, not the exposure.');
-          return;
-        }
-      }
-      w.active = activeCb.checked;
-      await FWDB.putWord(w);
-      renderList();
-    });
-    activeLbl.appendChild(activeCb);
-    activeLbl.appendChild(document.createTextNode(' In rotation'));
-    li.appendChild(activeLbl);
-
-    const saysLbl = document.createElement('label');
-    saysLbl.className = 'chk';
-    const saysCb = document.createElement('input');
-    saysCb.type = 'checkbox';
-    saysCb.checked = !!w.saysIt;
-    saysCb.addEventListener('change', async () => {
-      w.saysIt = saysCb.checked;
-      w.saysItAt = saysCb.checked ? Date.now() : null;
-      await FWDB.putWord(w);
-      renderList();
-    });
-    saysLbl.appendChild(saysCb);
-    saysLbl.appendChild(document.createTextNode(' He says it'));
-    li.appendChild(saysLbl);
-
-    const actions = document.createElement('div');
-    actions.className = 'row-actions';
-
-    if (w.audio) {
-      const play = document.createElement('button');
-      play.className = 'btn';
-      play.type = 'button';
-      play.textContent = '▶';
-      play.setAttribute('aria-label', 'Play the recording for ' + w.label);
-      play.addEventListener('click', () => {
-        previewAudio.src = track(URL.createObjectURL(w.audio));
-        previewAudio.play();
-      });
-      actions.appendChild(play);
+    const acts = el('div', 'wacts');
+    if (!w.audio) {
+      const rec = el('button', 'btn small primary', '● Record');
+      rec.type = 'button';
+      rec.addEventListener('click', () => startFlow([w.id]));
+      acts.appendChild(rec);
+    } else {
+      const listen = el('button', 'btn small', '▶');
+      listen.type = 'button';
+      listen.setAttribute('aria-label', 'Listen to ' + w.label);
+      listen.addEventListener('click', () => play(w.audio));
+      acts.appendChild(listen);
     }
-
-    const edit = document.createElement('button');
-    edit.className = 'btn';
-    edit.type = 'button';
-    edit.textContent = w.audio ? 'Edit' : '● Record'; // the missing step, spelled out
-    edit.addEventListener('click', () => startEdit(w));
-    actions.appendChild(edit);
-
-    const del = document.createElement('button');
-    del.className = 'btn danger';
-    del.type = 'button';
-    del.textContent = 'Delete';
-    del.addEventListener('click', async () => {
-      if (confirm('Delete “' + w.label + '”? This removes its photo and recording.')) {
-        await FWDB.deleteWord(w.id);
-        renderList();
-        renderTopicControls();
-      }
+    const saysBtn = el('button', 'btn small' + (w.saysIt ? ' on' : ''), w.saysIt ? 'Says it ✓' : 'Says it');
+    saysBtn.type = 'button';
+    saysBtn.addEventListener('click', async () => {
+      w.saysIt = !w.saysIt;
+      w.saysItAt = w.saysIt ? Date.now() : null;
+      if (w.saysIt) w.active = false;
+      await FWDB.putWord(w);
+      await refresh(); render();
     });
-    actions.appendChild(del);
-
-    li.appendChild(actions);
+    acts.appendChild(saysBtn);
+    const edit = el('button', 'btn small quiet', 'Edit');
+    edit.type = 'button';
+    edit.addEventListener('click', () => openForm(w));
+    acts.appendChild(edit);
+    li.appendChild(acts);
     return li;
   }
 
-  /* ---------- the add/edit form ---------- */
+  async function togglePractising(w) {
+    if (w.saysIt) { note('He says this one already. Untick “Says it” to practise it again.'); return; }
+    if (!w.audio) { startFlow([w.id]); return; }
+    if (w.active) {
+      w.active = false;
+    } else if (practisingCount(topicOf(w)) >= MAX_ACTIVE) {
+      note('Six words is plenty for one topic. Rest one first by tapping its picture.');
+      return;
+    } else {
+      w.active = true;
+    }
+    note('');
+    await FWDB.putWord(w);
+    await refresh(); render();
+  }
 
-  function resetForm() {
-    editingId = null;
+  /* ---------- guided recording: one word at a time ---------- */
+
+  function startFlow(ids) {
+    if (!recorder.available()) {
+      note('Recording needs the secure (https) address on the iPad.');
+      return;
+    }
+    recQueue = ids.slice();
+    hideForm();
+    note('');
+    $('rec-panel').hidden = false;
+    $('word-grid').hidden = true;
+    $('grid-legend').hidden = true;
+    nextInFlow();
+    $('rec-panel').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
+  function nextInFlow() {
+    recTaken = null;
+    while (recQueue.length && !words.find(w => w.id === recQueue[0])) recQueue.shift();
+    if (!recQueue.length) { closeFlow(false); return; }
+    recCurrent = words.find(w => w.id === recQueue[0]);
+    $('rec-progress').textContent = recQueue.length > 1 ? recQueue.length + ' to go' : 'Last one';
+    $('rec-word').textContent = recCurrent.label;
+    $('rec-photo').src = recCurrent.photo ? track(URL.createObjectURL(recCurrent.photo)) : '';
+    $('rec-toggle').textContent = '● Record';
+    $('rec-time').textContent = '';
+    $('rec-listen').hidden = true;
+    $('rec-save').hidden = true;
+    say('rec-msg', '');
+  }
+
+  async function toggleFlowRecord() {
+    if (recorder.recording) {
+      $('rec-toggle').disabled = true;
+      recTaken = await recorder.stop();
+      stopTimer();
+      $('rec-toggle').disabled = false;
+      $('rec-toggle').textContent = '● Record again';
+      $('rec-listen').hidden = !recTaken;
+      $('rec-save').hidden = !recTaken;
+      return;
+    }
+    try {
+      await recorder.start();
+      $('rec-toggle').textContent = '■ Stop';
+      $('rec-listen').hidden = true;
+      $('rec-save').hidden = true;
+      startTimer('rec-time');
+      say('rec-msg', '');
+    } catch (err) {
+      say('rec-msg', 'Couldn’t open the microphone. Allow microphone access and try again.');
+    }
+  }
+
+  async function saveInFlow() {
+    if (!recCurrent || !recTaken) return;
+    const w = recCurrent;
+    w.audio = recTaken;
+    activateIfRoom(w);
+    await FWDB.putWord(w);
+    await refresh();
+    recQueue.shift();
+    nextInFlow();
+  }
+
+  function skipInFlow() { recQueue.shift(); nextInFlow(); }
+
+  async function closeFlow(silent) {
+    stopTimer();
+    if (recorder.recording) await recorder.stop();
+    const wasOpen = !$('rec-panel').hidden;
+    $('rec-panel').hidden = true;
+    $('word-grid').hidden = false;
+    $('grid-legend').hidden = false;
+    recQueue = []; recCurrent = null; recTaken = null;
+    if (wasOpen && !silent) {
+      await refresh();
+      const left = inTopic(topic).filter(w => !w.audio && !w.saysIt).length;
+      render();
+      note(left ? 'Saved. ' + left + ' still need' + (left === 1 ? 's' : '') + ' your voice.' : 'All recorded. ' + practisingCount(topic) + ' words are practising.');
+    }
+  }
+
+  /* ---------- the add view: packs, one word, files ---------- */
+
+  async function loadPacks() {
+    try {
+      const res = await fetch('packs/index.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('http ' + res.status);
+      const data = await res.json();
+      packs = (data && data.packs) || [];
+      packsError = false;
+    } catch (e) {
+      packs = [];
+      packsError = true;
+    }
+    if (view === 'add') renderAdd();
+    if (!packsError) repairMissingPhotos();
+  }
+
+  // A word whose picture went missing (an earlier version could lose it when a
+  // recording was saved) gets it back from the pack it came from, quietly.
+  async function repairMissingPhotos() {
+    let restored = 0;
+    for (const p of packs) {
+      const missing = inTopic(String(p.name)).filter(w => !w.photo);
+      if (!missing.length) continue;
+      try {
+        const res = await fetch('packs/' + p.id + '/pack.json', { cache: 'no-store' });
+        if (!res.ok) continue;
+        const pack = await res.json();
+        for (const w of missing) {
+          const entry = (pack.words || []).find(x => x.label.toLowerCase() === w.label.toLowerCase());
+          if (!entry || !entry.photo) continue;
+          w.photo = await fetchBlob('packs/' + p.id + '/' + entry.photo);
+          await FWDB.putWord(w);
+          restored += 1;
+        }
+      } catch (e) { /* offline or a missing pack: try again next time */ }
+    }
+    if (restored) {
+      await refresh();
+      render();
+      note(restored + ' picture' + (restored === 1 ? '' : 's') + ' restored from the pack.');
+    }
+  }
+
+  function renderAdd() {
+    const list = $('packs-list');
+    list.textContent = '';
+    const have = topics().map(t => t.toLowerCase());
+    if (packs === null) { say('packs-msg', 'Looking for packs…'); return; }
+    if (packsError) { say('packs-msg', 'Packs need an internet connection. Connect and reopen the parent area.'); return; }
+    const todo = packs.filter(p => !have.includes(String(p.name).toLowerCase()));
+    if (!todo.length) { say('packs-msg', packs.length ? 'Every pack is already in his words.' : 'No packs published yet.'); return; }
+    say('packs-msg', '');
+    todo.forEach(p => {
+      const li = el('li', 'pack-row');
+      const main = el('div', 'w-main');
+      main.appendChild(el('strong', null, p.name));
+      main.appendChild(el('span', 'w-meta', p.words + ' pictures'));
+      li.appendChild(main);
+      const btn = el('button', 'btn primary', 'Add');
+      btn.type = 'button';
+      btn.addEventListener('click', () => addPack(p, btn));
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
+  async function fetchBlob(url) {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('http ' + res.status);
+    return res.blob();
+  }
+
+  async function addPack(p, btn) {
+    btn.disabled = true;
+    try {
+      const res = await fetch('packs/' + p.id + '/pack.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('http ' + res.status);
+      const pack = await res.json();
+      const name = ((pack.name || p.name || p.id) + '').trim();
+      const list = pack.words || [];
+      const items = [];
+      for (let i = 0; i < list.length; i++) {
+        const w = list[i];
+        say('packs-msg', 'Adding ' + name + '… ' + (i + 1) + ' of ' + list.length);
+        items.push({
+          label: w.label,
+          photo: w.photo ? await fetchBlob('packs/' + p.id + '/' + w.photo) : null,
+          audio: w.audio ? await fetchBlob('packs/' + p.id + '/' + w.audio) : null
+        });
+      }
+      const r = await mergeWords(name, items, false);
+      await refresh();
+      topic = name; view = 'topic';
+      await FWDB.setSetting('currentTopic', name);
+      render();
+      note(r.added + ' pictures added. Now record your voice for a few of them.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      say('packs-msg', 'Couldn’t add that pack. Check the internet connection and try again.');
+      btn.disabled = false;
+    }
+  }
+
+  // items: [{ label, photo, audio }] → new words, or fill in what an existing word in the
+  // topic is missing. Words with a voice join the practice set while there is room.
+  async function mergeWords(name, items, shrinkPhotos) {
+    const r = { added: 0, updated: 0, skipped: 0 };
+    let n = 0;
+    for (const it of items) {
+      const label = (it.label || '').trim();
+      if (!label) { r.skipped += 1; continue; }
+      const existing = inTopic(name).find(w => w.label.toLowerCase() === label.toLowerCase());
+      if (existing) {
+        let changed = false;
+        if (it.photo && !existing.photo) { existing.photo = shrinkPhotos ? await processPhoto(it.photo) : it.photo; changed = true; }
+        if (it.audio && !existing.audio) { existing.audio = it.audio; activateIfRoom(existing); changed = true; }
+        if (changed) { await FWDB.putWord(existing); r.updated += 1; } else { r.skipped += 1; }
+        continue;
+      }
+      if (!it.photo) { r.skipped += 1; continue; }
+      const w = {
+        label, topic: name,
+        photo: shrinkPhotos ? await processPhoto(it.photo) : it.photo,
+        audio: it.audio || null,
+        active: false, saysIt: false, timesNamed: 0,
+        createdAt: Date.now() + n
+      };
+      n += 1;
+      activateIfRoom(w);
+      await FWDB.putWord(w);
+      words.push(w);
+      r.added += 1;
+    }
+    return r;
+  }
+
+  function kindOf(file) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if ((file.type || '').startsWith('image/') || IMAGE_EXT[ext]) return 'image';
+    if ((file.type || '').startsWith('audio/') || AUDIO_EXT[ext]) return 'audio';
+    return null;
+  }
+
+  function labelFromName(name) {
+    return name.replace(/\.[^.]+$/, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+
+  async function importFiles() {
+    const files = Array.from($('f-import-files').files || []);
+    const name = $('f-import-topic').value.trim();
+    if (!name) { say('import-msg', 'Type the topic these belong to.'); return; }
+    if (!files.length) { say('import-msg', 'Choose the photos and recordings first.'); return; }
+    const byLabel = new Map();
+    for (const f of files) {
+      const kind = kindOf(f);
+      const label = labelFromName(f.name);
+      if (!kind || !label) continue;
+      if (!byLabel.has(label)) byLabel.set(label, { label, photo: null, audio: null });
+      const it = byLabel.get(label);
+      if (kind === 'image' && !it.photo) it.photo = f;
+      if (kind === 'audio' && !it.audio) {
+        const ext = (f.name.split('.').pop() || '').toLowerCase();
+        it.audio = f.type ? f : new Blob([f], { type: AUDIO_EXT[ext] || 'audio/mp4' });
+      }
+    }
+    say('import-msg', 'Importing…');
+    const r = await mergeWords(name, Array.from(byLabel.values()), true);
+    $('f-import-files').value = '';
+    await refresh();
+    if (r.added || r.updated) {
+      topic = name; view = 'topic';
+      await FWDB.setSetting('currentTopic', name);
+      render();
+      note((r.added ? r.added + ' added' : '') + (r.added && r.updated ? ', ' : '') + (r.updated ? r.updated + ' filled in' : '') + '.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      say('import-msg', 'Nothing new there. A word needs a photo file, like apple.jpg.');
+    }
+  }
+
+  /* ---------- the add/edit form (one word) ---------- */
+
+  async function openForm(w) {
+    await closeFlow(true);
+    editingId = w ? w.id : null;
     photoBlob = null;
     recBlob = null;
     $('f-photo').value = '';
-    $('f-word').value = '';
-    $('f-topic').value = lastTopic;
+    $('f-word').value = w ? w.label : '';
+    $('f-topic').value = w ? (w.topic || '') : (view === 'topic' ? topic : '');
     $('photo-preview').textContent = '';
     $('photo-preview').hidden = true;
-    $('btn-rec-play').hidden = true;
+    if (w && w.photo) setPreview(w.photo);
     $('btn-rec').textContent = '● Record';
-    $('rec-time').textContent = '';
-    formMsg('');
+    $('f-rec-time').textContent = '';
+    $('btn-rec-play').hidden = !(w && w.audio);
+    $('btn-form-delete').hidden = !w;
+    $('form-title').textContent = w ? 'Edit “' + w.label + '”' : 'Add a word';
+    say('form-msg', '');
+    $('word-form').hidden = false;
+    $('word-form').scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
-  function showForm() { $('word-form').hidden = false; $('btn-add-word').hidden = true; }
-  function hideForm() { stopRecorderIfNeeded(); $('word-form').hidden = true; $('btn-add-word').hidden = false; resetForm(); }
-
-  function startEdit(w) {
-    resetForm();
-    showForm();
-    editingId = w.id;
-    $('f-word').value = w.label;
-    $('f-topic').value = w.topic || '';
-    if (w.photo) setPreview(w.photo);
-    if (w.audio) $('btn-rec-play').hidden = false;
-    formMsg('');
-    $('word-form').scrollIntoView({ block: 'start' });
+  function hideForm() {
+    stopTimer();
+    if (recorder.recording) recorder.stop();
+    $('word-form').hidden = true;
+    editingId = null; photoBlob = null; recBlob = null;
   }
 
   function setPreview(blob) {
     const holder = $('photo-preview');
     holder.textContent = '';
-    const img = document.createElement('img');
+    const img = el('img');
     img.alt = 'Chosen photo';
     img.src = track(URL.createObjectURL(blob));
     holder.appendChild(img);
@@ -310,310 +603,116 @@ window.FWParent = (function () {
       const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85));
       return blob || file;
     } catch (e) {
-      return file; // format the browser can't draw (rare): keep the original
+      return file;
     } finally {
       URL.revokeObjectURL(url);
     }
   }
 
-  /* ---------- recording ---------- */
-
-  let stopWaiters = [];
-  let stopPending = false; // stop() was called; the browser hasn't handed over the audio yet
-
-  function requestStop() {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      stopPending = true;
-      mediaRecorder.stop(); // the audio arrives a moment later, in onstop
-    }
-  }
-
-  // Resolves once any recording has been turned into recBlob (or right away).
-  function stopRecorderIfNeeded() {
-    requestStop();
-    if (!stopPending) return Promise.resolve();
-    return new Promise(resolve => {
-      stopWaiters.push(resolve);
-      setTimeout(resolve, 3000); // never leave the form hanging if the browser never fires onstop
-    });
-  }
-
-  async function toggleRecord() {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      requestStop();
+  async function toggleFormRecord() {
+    if (recorder.recording) {
+      $('btn-rec').disabled = true;
+      recBlob = await recorder.stop();
+      stopTimer();
+      $('btn-rec').disabled = false;
+      $('btn-rec').textContent = '● Record again';
+      $('btn-rec-play').hidden = !recBlob;
       return;
     }
-    if (!navigator.mediaDevices || !window.MediaRecorder) {
-      formMsg('Recording is not available here. On the iPad it needs the secure (HTTPS) address.');
-      return;
-    }
+    if (!recorder.available()) { say('form-msg', 'Recording needs the secure (https) address on the iPad.'); return; }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
-        .find(m => MediaRecorder.isTypeSupported(m)) || '';
-      mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-      recChunks = [];
-      mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
-      mediaRecorder.onstop = () => {
-        recBlob = new Blob(recChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-        stream.getTracks().forEach(t => t.stop());
-        clearInterval(recTimer);
-        $('btn-rec').textContent = '● Record again';
-        $('btn-rec-play').hidden = false;
-        formMsg('');
-        stopPending = false;
-        stopWaiters.splice(0).forEach(fn => fn());
-      };
-      mediaRecorder.start();
-      recStartedAt = Date.now();
+      await recorder.start();
       $('btn-rec').textContent = '■ Stop';
-      $('rec-time').textContent = '0.0 s';
-      recTimer = setInterval(() => {
-        $('rec-time').textContent = ((Date.now() - recStartedAt) / 1000).toFixed(1) + ' s';
-      }, 100);
+      startTimer('f-rec-time');
+      say('form-msg', '');
     } catch (err) {
-      formMsg('Couldn’t open the microphone. Allow microphone access and try again.');
+      say('form-msg', 'Couldn’t open the microphone. Allow microphone access and try again.');
     }
   }
 
-  async function playRecording() {
+  function playFormRecording() {
     let blob = recBlob;
-    if (!blob && editingId != null) {
-      const w = await FWDB.getWord(editingId);
-      blob = w && w.audio;
-    }
-    if (!blob) return;
-    previewAudio.src = track(URL.createObjectURL(blob));
-    previewAudio.play();
+    if (!blob && editingId != null) { const w = words.find(x => x.id === editingId); blob = w && w.audio; }
+    if (blob) play(blob);
   }
 
-  /* ---------- save one word ---------- */
-
-  async function save(e) {
+  async function saveForm(e) {
     e.preventDefault();
-    await stopRecorderIfNeeded(); // a tap on Save while still recording keeps the recording
+    if (recorder.recording) { recBlob = await recorder.stop(); stopTimer(); }
     const label = $('f-word').value.trim();
-    if (!label) { formMsg('Type the word.'); return; }
-    const topic = $('f-topic').value.trim() || FWDB.DEFAULT_TOPIC;
-
-    let existing = null;
-    if (editingId != null) existing = await FWDB.getWord(editingId);
-
+    if (!label) { say('form-msg', 'Type the word.'); return; }
+    const name = $('f-topic').value.trim() || FWDB.DEFAULT_TOPIC;
+    const existing = editingId != null ? words.find(x => x.id === editingId) : null;
     const photo = photoBlob || (existing && existing.photo) || null;
-    const audio = recBlob || (existing && existing.audio) || null;
-    if (!photo) { formMsg('Add a photo of the real thing.'); return; }
-    if (!audio) { formMsg('Record your voice saying the word.'); return; }
-
-    const word = existing || { createdAt: Date.now(), active: true, timesNamed: 0, saysIt: false };
-    word.label = label;
-    word.topic = topic;
-    word.photo = photo;
-    word.audio = audio;
-
-    if (!existing) {
-      const words = await FWDB.allWords();
-      const activeCount = words.filter(w => w.active && !w.saysIt && topicOf(w) === topic).length;
-      if (activeCount >= MAX_ACTIVE) word.active = false; // joins the library, waits its turn
-    }
-
-    await FWDB.putWord(word);
-    lastTopic = topic;
+    if (!photo) { say('form-msg', 'Add a photo of the real thing.'); return; }
+    const w = existing || { createdAt: Date.now(), active: false, timesNamed: 0, saysIt: false };
+    w.label = label;
+    w.topic = name;
+    w.photo = photo;
+    if (recBlob) w.audio = recBlob;
+    activateIfRoom(w);
+    await FWDB.putWord(w);
+    await refresh();
     hideForm();
-    note('');
-    renderList();
-    renderTopicControls();
+    topic = name; view = 'topic';
+    await FWDB.setSetting('currentTopic', name);
+    render();
+    note(existing ? 'Saved.' : (w.audio ? 'Added and practising.' : 'Added. Record your voice when you’re ready.'));
   }
 
-  /* ---------- adding many at once ---------- */
-
-  // items: [{ label, photo: Blob|null, audio: Blob|null }]. New labels become words
-  // (not in rotation — the parent picks 3–6); an existing label in the topic gets its
-  // missing photo or voice filled in. Returns counts for the summary line.
-  async function mergeWords(topic, items, shrinkPhotos) {
-    const words = await FWDB.allWords();
-    const inTopic = words.filter(w => topicOf(w) === topic);
-    const r = { added: 0, updated: 0, skipped: 0, needVoice: 0 };
-    let n = 0;
-    for (const it of items) {
-      const label = (it.label || '').trim();
-      if (!label) { r.skipped += 1; continue; }
-      const existing = inTopic.find(w => w.label.toLowerCase() === label.toLowerCase());
-      if (existing) {
-        let changed = false;
-        if (it.photo && !existing.photo) { existing.photo = shrinkPhotos ? await processPhoto(it.photo) : it.photo; changed = true; }
-        if (it.audio && !existing.audio) { existing.audio = it.audio; changed = true; }
-        if (changed) { await FWDB.putWord(existing); r.updated += 1; } else { r.skipped += 1; }
-        if (!existing.audio) r.needVoice += 1;
-        continue;
-      }
-      if (!it.photo) { r.skipped += 1; continue; } // a recording with nothing to attach to
-      const word = {
-        label, topic,
-        photo: shrinkPhotos ? await processPhoto(it.photo) : it.photo,
-        audio: it.audio || null,
-        active: false, saysIt: false, timesNamed: 0,
-        createdAt: Date.now() + n
-      };
-      n += 1;
-      await FWDB.putWord(word);
-      inTopic.push(word);
-      r.added += 1;
-      if (!word.audio) r.needVoice += 1;
+  async function deleteFromForm() {
+    if (editingId == null) return;
+    const w = words.find(x => x.id === editingId);
+    if (!w) return;
+    if (!confirm('Delete “' + w.label + '”? This removes its picture and your recording.')) return;
+    await FWDB.deleteWord(w.id);
+    await refresh();
+    hideForm();
+    const names = topics();
+    if (!names.includes(topic)) {
+      topic = names[0] || '';
+      await FWDB.setSetting('currentTopic', topic);
+      view = topic ? 'topic' : 'add';
     }
-    return r;
-  }
-
-  function summary(topic, r) {
-    const bits = [];
-    if (r.added) bits.push(r.added + ' added');
-    if (r.updated) bits.push(r.updated + ' filled in');
-    if (r.skipped) bits.push(r.skipped + ' skipped (already there, or a recording with no photo)');
-    let s = '“' + topic + '”: ' + (bits.length ? bits.join(', ') : 'nothing new') + '.';
-    if (r.added || r.updated) {
-      s += ' Now tick “In rotation” on 3–6 of them';
-      if (r.needVoice) s += ' and record your voice for the ' + r.needVoice + ' without one';
-      s += '.';
-    }
-    return s;
-  }
-
-  async function fetchBlob(url) {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error('http ' + res.status);
-    return res.blob();
-  }
-
-  async function loadPacks() {
-    const list = $('packs-list');
-    list.textContent = '';
-    try {
-      const res = await fetch('packs/index.json', { cache: 'no-store' });
-      if (!res.ok) throw new Error('http ' + res.status);
-      const data = await res.json();
-      const packs = (data && data.packs) || [];
-      if (!packs.length) { say('packs-msg', 'No packs published yet.'); return; }
-      say('packs-msg', '');
-      for (const p of packs) {
-        const li = document.createElement('li');
-        li.className = 'pack-row';
-        const main = document.createElement('div');
-        main.className = 'w-main';
-        const strong = document.createElement('strong');
-        strong.textContent = p.name;
-        const meta = document.createElement('span');
-        meta.className = 'w-meta';
-        meta.textContent = p.words + ' words, ' +
-          (p.recordings ? p.recordings + ' with recordings' : 'photos only — you record the voice');
-        main.appendChild(strong);
-        main.appendChild(meta);
-        li.appendChild(main);
-        const btn = document.createElement('button');
-        btn.className = 'btn primary';
-        btn.type = 'button';
-        btn.textContent = 'Add to his words';
-        btn.addEventListener('click', () => addPack(p, btn));
-        li.appendChild(btn);
-        list.appendChild(li);
-      }
-    } catch (e) {
-      say('packs-msg', 'Packs need an internet connection. Connect, then reopen the parent area.');
-    }
-  }
-
-  async function addPack(p, btn) {
-    btn.disabled = true;
-    try {
-      const res = await fetch('packs/' + p.id + '/pack.json', { cache: 'no-store' });
-      if (!res.ok) throw new Error('http ' + res.status);
-      const pack = await res.json();
-      const topic = ((pack.name || p.name || p.id) + '').trim();
-      const list = pack.words || [];
-      const items = [];
-      for (let i = 0; i < list.length; i++) {
-        const w = list[i];
-        say('packs-msg', 'Adding ' + topic + '… ' + (i + 1) + ' of ' + list.length);
-        items.push({
-          label: w.label,
-          photo: w.photo ? await fetchBlob('packs/' + p.id + '/' + w.photo) : null,
-          audio: w.audio ? await fetchBlob('packs/' + p.id + '/' + w.audio) : null
-        });
-      }
-      const r = await mergeWords(topic, items, false); // pack photos are already sized
-      say('packs-msg', summary(topic, r));
-      await renderList();
-      await renderTopicControls();
-    } catch (e) {
-      say('packs-msg', 'Couldn’t add that pack — check the internet connection and try again.');
-      btn.disabled = false;
-    }
-  }
-
-  function kindOf(file) {
-    const ext = (file.name.split('.').pop() || '').toLowerCase();
-    if ((file.type || '').startsWith('image/') || IMAGE_EXT[ext]) return 'image';
-    if ((file.type || '').startsWith('audio/') || AUDIO_EXT[ext]) return 'audio';
-    return null;
-  }
-
-  function labelFromName(name) {
-    return name.replace(/\.[^.]+$/, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-  }
-
-  async function importFiles() {
-    const files = Array.from($('f-import-files').files || []);
-    const topic = $('f-import-topic').value.trim();
-    if (!topic) { say('import-msg', 'Type the topic these belong to.'); return; }
-    if (!files.length) { say('import-msg', 'Choose the photos and recordings first.'); return; }
-
-    const byLabel = new Map();
-    for (const f of files) {
-      const kind = kindOf(f);
-      const label = labelFromName(f.name);
-      if (!kind || !label) continue;
-      if (!byLabel.has(label)) byLabel.set(label, { label, photo: null, audio: null });
-      const it = byLabel.get(label);
-      if (kind === 'image' && !it.photo) it.photo = f;
-      if (kind === 'audio' && !it.audio) {
-        const ext = (f.name.split('.').pop() || '').toLowerCase();
-        it.audio = f.type ? f : new Blob([f], { type: AUDIO_EXT[ext] || 'audio/mp4' });
-      }
-    }
-    say('import-msg', 'Importing…');
-    const r = await mergeWords(topic, Array.from(byLabel.values()), true);
-    say('import-msg', summary(topic, r));
-    $('f-import-files').value = '';
-    lastTopic = topic;
-    await renderList();
-    await renderTopicControls();
+    render();
+    note('Deleted.');
   }
 
   /* ---------- wiring ---------- */
 
   function wire() {
-    $('btn-add-word').addEventListener('click', () => { resetForm(); showForm(); });
+    $('btn-record-all').addEventListener('click', () => {
+      startFlow(inTopic(topic).filter(w => !w.audio && !w.saysIt).map(w => w.id));
+    });
+    $('rec-toggle').addEventListener('click', toggleFlowRecord);
+    $('rec-listen').addEventListener('click', () => { if (recTaken) play(recTaken); });
+    $('rec-save').addEventListener('click', saveInFlow);
+    $('rec-skip').addEventListener('click', skipInFlow);
+    $('rec-close').addEventListener('click', () => closeFlow(false));
+
+    $('btn-add-word').addEventListener('click', () => openForm(null));
     $('btn-form-cancel').addEventListener('click', hideForm);
-    $('word-form').addEventListener('submit', save);
-    $('btn-rec').addEventListener('click', toggleRecord);
-    $('btn-rec-play').addEventListener('click', playRecording);
+    $('btn-form-delete').addEventListener('click', deleteFromForm);
+    $('word-form').addEventListener('submit', saveForm);
+    $('btn-rec').addEventListener('click', toggleFormRecord);
+    $('btn-rec-play').addEventListener('click', playFormRecording);
     $('f-photo').addEventListener('change', async () => {
       const file = $('f-photo').files[0];
       if (!file) return;
       photoBlob = await processPhoto(file);
       setPreview(photoBlob);
     });
+    $('btn-import').addEventListener('click', importFiles);
+
     $('f-taps').addEventListener('change', () => {
       FWDB.setSetting('tapsPerSession', parseInt($('f-taps').value, 10) || 0);
     });
     document.querySelectorAll('input[name="session-mode"]').forEach(r => {
       r.addEventListener('change', () => { if (r.checked) FWDB.setSetting('sessionMode', r.value); });
     });
-    $('f-topic-session').addEventListener('change', () => {
-      lastTopic = $('f-topic-session').value;
-      FWDB.setSetting('currentTopic', lastTopic);
-    });
-    $('btn-import').addEventListener('click', importFiles);
-    $('btn-to-start').addEventListener('click', () => {
-      stopRecorderIfNeeded();
+    $('btn-to-start').addEventListener('click', async () => {
+      await closeFlow(true);
+      hideForm();
       FWApp.show('start');
     });
   }

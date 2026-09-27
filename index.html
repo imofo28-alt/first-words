@@ -52,73 +52,99 @@
   <div class="parent-wrap">
     <header class="parent-head">
       <h2>Parent area</h2>
-      <button id="btn-to-start" class="btn primary">Start a session</button>
+      <button id="btn-to-start" class="btn primary">Start</button>
     </header>
     <p class="parent-note" id="parent-note" hidden></p>
     <datalist id="topic-list"></datalist>
 
-    <section class="p-block">
-      <div class="p-block-head">
-        <h3>His words <span id="word-counts" class="count"></span></h3>
-        <button id="btn-add-word" class="btn">+ Add a word</button>
+    <nav class="tabs" id="topic-tabs" aria-label="Topics"></nav>
+
+    <!-- one topic at a time -->
+    <section id="topic-view">
+      <div class="topic-bar">
+        <p class="topic-summary" id="topic-summary"></p>
+        <button id="btn-record-all" class="btn primary" type="button" hidden>● Record voices</button>
       </div>
+      <p class="tip" id="topic-hint" hidden></p>
 
-      <form id="word-form" hidden>
-        <div class="form-grid">
-          <div>
-            <label class="f-label" for="f-photo">Photo</label>
-            <input type="file" id="f-photo" accept="image/*">
-            <div id="photo-preview" class="photo-preview" hidden></div>
-            <p class="tip">One real thing, plain background, filling the frame.</p>
-          </div>
-          <div>
-            <label class="f-label" for="f-word">Word</label>
-            <input type="text" id="f-word" maxlength="30" autocomplete="off" placeholder="ball">
-            <label class="f-label gap" for="f-topic">Topic</label>
-            <input type="text" id="f-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="Fruits">
-            <p class="f-label gap">Your voice</p>
-            <p class="tip coach">Slow, warm, twice: “Ball! … Ball.”</p>
-            <div class="rec-row">
-              <button type="button" id="btn-rec" class="btn">● Record</button>
-              <span id="rec-time" class="rec-time"></span>
-              <button type="button" id="btn-rec-play" class="btn" hidden>▶ Listen</button>
-            </div>
-          </div>
+      <section id="rec-panel" class="rec-panel" hidden>
+        <div class="rec-top">
+          <span id="rec-progress"></span>
+          <button id="rec-close" class="btn quiet" type="button">Done</button>
         </div>
-        <p id="form-msg" class="form-msg" hidden></p>
-        <div class="form-actions">
-          <button type="submit" class="btn primary">Save word</button>
-          <button type="button" id="btn-form-cancel" class="btn">Cancel</button>
+        <img id="rec-photo" class="rec-photo" alt="">
+        <h3 class="rec-word" id="rec-word"></h3>
+        <p class="tip">Say it twice, slow and warm — “Apple! … Apple.” — then Stop.</p>
+        <div class="rec-controls">
+          <button id="rec-toggle" class="big-btn" type="button">● Record</button>
+          <span id="rec-time" class="rec-time"></span>
         </div>
-      </form>
+        <div class="rec-controls">
+          <button id="rec-listen" class="btn" type="button" hidden>▶ Listen</button>
+          <button id="rec-save" class="btn primary" type="button" hidden>Save and next</button>
+          <button id="rec-skip" class="btn quiet" type="button">Skip</button>
+        </div>
+        <p id="rec-msg" class="tip" hidden></p>
+      </section>
 
-      <ul id="word-list" class="word-list"></ul>
+      <ul id="word-grid" class="wgrid"></ul>
+      <p class="tip legend" id="grid-legend">Tap a picture to rest it or practise it. Up to six practise at a time.</p>
     </section>
 
-    <section class="p-block">
-      <h3>Packs</h3>
-      <p class="tip">A topic of pictures, ready to add. You record the voice for each word.</p>
+    <!-- adding -->
+    <section id="add-view" hidden>
+      <h3>Add a topic</h3>
       <ul id="packs-list" class="word-list"></ul>
       <p id="packs-msg" class="tip" hidden></p>
-      <details class="sub">
-        <summary>Import your own photos and recordings</summary>
-        <p class="tip">Name each file after the word — <em>apple.jpg</em>, <em>apple.m4a</em> — choose them all, and tap Import. Recordings added later attach to the matching words.</p>
-        <div class="import-row">
-          <input type="text" id="f-import-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="Topic">
-          <input type="file" id="f-import-files" multiple accept="image/*,audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.jpg,.jpeg,.png,.webp,.heic">
-          <button type="button" id="btn-import" class="btn primary">Import</button>
-        </div>
-        <p id="import-msg" class="tip" hidden></p>
-      </details>
+      <div class="add-more">
+        <button id="btn-add-word" class="btn" type="button">+ Add a single word</button>
+        <details class="sub">
+          <summary>Import your own photos and recordings</summary>
+          <p class="tip">Name each file after the word — <em>apple.jpg</em>, <em>apple.m4a</em> — choose them all, and tap Import.</p>
+          <div class="import-row">
+            <input type="text" id="f-import-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="Topic">
+            <input type="file" id="f-import-files" multiple accept="image/*,audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.jpg,.jpeg,.png,.webp,.heic">
+            <button type="button" id="btn-import" class="btn primary">Import</button>
+          </div>
+          <p id="import-msg" class="tip" hidden></p>
+        </details>
+      </div>
     </section>
 
-    <section class="p-block">
-      <h3>Session</h3>
-      <div class="settings-grid">
-        <div id="session-topic-row" hidden>
-          <label class="f-label" for="f-topic-session">Topic</label>
-          <select id="f-topic-session"><option value="">Any topic</option></select>
+    <!-- one word: add or edit -->
+    <form id="word-form" hidden>
+      <h3 id="form-title">Add a word</h3>
+      <div class="form-grid">
+        <div>
+          <label class="f-label" for="f-photo">Photo</label>
+          <input type="file" id="f-photo" accept="image/*">
+          <div id="photo-preview" class="photo-preview" hidden></div>
+          <p class="tip">One real thing, plain background, filling the frame.</p>
         </div>
+        <div>
+          <label class="f-label" for="f-word">Word</label>
+          <input type="text" id="f-word" maxlength="30" autocomplete="off" placeholder="ball">
+          <label class="f-label gap" for="f-topic">Topic</label>
+          <input type="text" id="f-topic" list="topic-list" maxlength="30" autocomplete="off" placeholder="Fruits">
+          <p class="f-label gap">Your voice</p>
+          <div class="rec-row">
+            <button type="button" id="btn-rec" class="btn">● Record</button>
+            <span id="f-rec-time" class="rec-time"></span>
+            <button type="button" id="btn-rec-play" class="btn" hidden>▶ Listen</button>
+          </div>
+        </div>
+      </div>
+      <p id="form-msg" class="form-msg" hidden></p>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">Save</button>
+        <button type="button" id="btn-form-cancel" class="btn">Cancel</button>
+        <button type="button" id="btn-form-delete" class="btn danger" hidden>Delete</button>
+      </div>
+    </form>
+
+    <details class="p-block" id="settings">
+      <summary>Session settings</summary>
+      <div class="settings-grid">
         <div>
           <label class="f-label" for="f-taps">Ends after</label>
           <select id="f-taps">
@@ -129,49 +155,41 @@
             <option value="10">10 words</option>
           </select>
         </div>
+        <div>
+          <p class="f-label">How he moves between pictures</p>
+          <div class="mode-opts">
+            <label class="mode-opt">
+              <input type="radio" name="session-mode" value="swipe">
+              <span><strong>Swipe</strong> — one picture; he swipes to the next, taps to hear it again</span>
+            </label>
+            <label class="mode-opt">
+              <input type="radio" name="session-mode" value="pair">
+              <span><strong>Tap</strong> — two pictures; he taps one</span>
+            </label>
+          </div>
+        </div>
       </div>
-      <p class="f-label gap">How he moves between pictures</p>
-      <div class="mode-opts">
-        <label class="mode-opt">
-          <input type="radio" name="session-mode" value="swipe">
-          <span><strong>Swipe</strong> — one picture; he swipes to the next, taps to hear it again</span>
-        </label>
-        <label class="mode-opt">
-          <input type="radio" name="session-mode" value="pair">
-          <span><strong>Tap</strong> — two pictures; he taps one</span>
-        </label>
-      </div>
-      <p class="tip">Keep 3–6 words in rotation per topic. Short and daily beats long and rare. To stop a “keep going” session, hold two fingers on the screen.</p>
-    </section>
+      <p class="tip">To stop a “keep going” session, hold two fingers on the screen.</p>
+    </details>
 
-    <section class="p-block">
-      <h3>Help</h3>
-      <details>
-        <summary>Using it with him</summary>
-        <ul>
-          <li>Together, on your lap. The app is a picture book; you are the teacher.</li>
-          <li>He swipes or taps; the app says the word in your voice. There are no wrong answers.</li>
-          <li>In the pause after the word, say it too. Afterwards, find the real thing: “Your ball! Same!”</li>
-          <li>Tick “He says it” once he uses a word away from the iPad.</li>
-        </ul>
-      </details>
-      <details>
-        <summary>Adding words</summary>
-        <ul>
-          <li>Packs: tap “Add to his words”, then “● Record” on each word (say it twice, slow and warm), and tick “In rotation” on 3–6 of them.</li>
-          <li>One word at a time: “+ Add a word” with a photo of the real thing.</li>
-          <li>Packs are on the public internet. Keep family photos out of them.</li>
-        </ul>
-      </details>
-      <details>
-        <summary>On the iPad</summary>
-        <ul>
-          <li>Open the app’s address in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It works offline after that.</li>
-          <li>Photos, recordings and the word list stay on the iPad only.</li>
-          <li>To lock the iPad to this app: Settings → Accessibility → <strong>Guided Access</strong>, then triple-click the top button while in the app.</li>
-        </ul>
-      </details>
-    </section>
+    <details class="p-block">
+      <summary>How to use it with him</summary>
+      <ul>
+        <li>Together, on your lap. The app is a picture book; you are the teacher.</li>
+        <li>He swipes or taps; the app says the word in your voice. There are no wrong answers.</li>
+        <li>In the pause after the word, say it too. Afterwards, find the real thing: “Your ball! Same!”</li>
+        <li>Tap “Says it” once he uses a word away from the iPad. Short and daily beats long and rare.</li>
+      </ul>
+    </details>
+
+    <details class="p-block">
+      <summary>On the iPad</summary>
+      <ul>
+        <li>Open the app’s address in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It works offline after that.</li>
+        <li>Photos, recordings and the word list stay on the iPad only. Packs are on the public internet, so keep family photos out of them.</li>
+        <li>To lock the iPad to this app: Settings → Accessibility → <strong>Guided Access</strong>, then triple-click the top button while in the app.</li>
+      </ul>
+    </details>
   </div>
 </section>
 
