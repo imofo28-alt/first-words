@@ -1,6 +1,6 @@
 /* Offline support: network first (so updates arrive), cache as fallback. */
 
-const V = '12';                 // keep in step with APP_VERSION in app.js and ?v= in index.html
+const V = '13';                 // keep in step with APP_VERSION in app.js and ?v= in index.html
 const CACHE = 'firstwords-v' + V;
 const ASSETS = [
   '.',

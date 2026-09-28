@@ -13,9 +13,9 @@
    then a cool-down. After N naming moments the session simply ends. */
 
 window.FWSession = (function () {
-  const SILENCE_AFTER_WORD_MS = 700;  // the parent+child turn (parent's call 2026-09-28: at most 1 s total)
+  const SILENCE_AFTER_WORD_MS = 0;    // no designed pause: he may swipe as soon as the word ends (parent's call 2026-09-28)
   const FOCUS_MOTION_MS = 450;        // pair: photo grows / returns
-  const EXTRA_COOLDOWN_MS = 300;      // after the silence, before touch counts again
+  const EXTRA_COOLDOWN_MS = 150;      // just enough that a swipe already in progress doesn't count twice
   const TAP_MAX_TRAVEL_PX = 80;       // a toddler tap wobbles; more than this is a drag
 
   // swipe mode
