@@ -11,21 +11,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
-<body data-screen="start">
-
-<!-- ============ START (adult hands it over from here) ============ -->
-<section id="screen-start" class="screen">
-  <div class="start-inner">
-    <h1>First Words</h1>
-    <p class="start-topic" id="start-topic" hidden></p>
-    <button id="btn-start" class="big-btn">Start</button>
-    <p class="start-msg" id="start-msg" hidden></p>
-    <p class="adult-line" id="start-line">Sit with him and say the word too.</p>
-    <p class="hint">Parents: hold two fingers on the screen. <span class="app-version"></span></p>
-  </div>
-</section>
+<body data-screen="parent">
 
 <!-- ============ CHILD SESSION ============ -->
 <section id="screen-session" class="screen" hidden>
@@ -52,11 +40,8 @@
 <section id="screen-parent" class="screen parent-screen" hidden>
   <div class="parent-wrap">
     <header class="parent-head">
-      <h2>Parent area</h2>
-      <div class="head-actions">
-        <button id="btn-home" class="btn" type="button">Home</button>
-        <button id="btn-to-start" class="btn primary" type="button">Start</button>
-      </div>
+      <h2>First Words <span class="ver app-version"></span></h2>
+      <button id="btn-to-start" class="btn primary" type="button">Start</button>
     </header>
     <p class="parent-note" id="parent-note" hidden></p>
     <datalist id="topic-list"></datalist>
@@ -173,7 +158,7 @@
           </div>
         </div>
       </div>
-      <p class="tip">To stop a “keep going” session, hold two fingers on the screen.</p>
+      <p class="tip">Start hands the iPad to him. To come back here from his screen, hold two fingers on it for two seconds.</p>
       <div class="latest-row">
         <button id="btn-latest" class="btn" type="button">Get the latest version</button>
         <span class="tip app-version"></span>
@@ -201,9 +186,9 @@
   </div>
 </section>
 
-<script src="js/db.js?v=11"></script>
-<script src="js/session.js?v=11"></script>
-<script src="js/parent.js?v=11"></script>
-<script src="js/app.js?v=11"></script>
+<script src="js/db.js?v=12"></script>
+<script src="js/session.js?v=12"></script>
+<script src="js/parent.js?v=12"></script>
+<script src="js/app.js?v=12"></script>
 </body>
 </html>

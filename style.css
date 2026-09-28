@@ -172,7 +172,7 @@ body {
 }
 .end-inner p { font-family: Georgia, serif; font-size: 18px; margin: 0; }
 .end-home { margin-top: 28px; }
-.head-actions { display: flex; gap: 8px; align-items: center; }
+.parent-head h2 .ver { font-family: inherit; font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
 
 /* ---------- Parent area ---------- */
 

@@ -1,37 +1,19 @@
 /* Screen switching, the two-finger parent gate, and boot. */
 
 window.FWApp = (function () {
-  const APP_VERSION = '11'; // shown on screen so a stale copy can be spotted; bump ?v= in index.html and V in sw.js too
+  const APP_VERSION = '12'; // shown on screen so a stale copy can be spotted; bump ?v= in index.html and V in sw.js too
   const GATE_HOLD_MS = 2000;     // two fingers, held still this long, opens the parent area
   const GATE_MAX_MOVE_PX = 30;
 
-  const screenIds = { start: 'screen-start', session: 'screen-session', end: 'screen-end', parent: 'screen-parent' };
+  // Two worlds: the parent area (home) and his screen. The end screen only appears
+  // when a session has a limit.
+  const screenIds = { session: 'screen-session', end: 'screen-end', parent: 'screen-parent' };
 
   function show(name) {
     Object.entries(screenIds).forEach(([key, id]) => {
       document.getElementById(id).hidden = key !== name;
     });
     document.body.dataset.screen = name;
-    if (name === 'start') refreshStart();
-  }
-
-  async function refreshStart() {
-    const { topic, words: ready } = await FWDB.sessionWords();
-    const btn = document.getElementById('btn-start');
-    const msg = document.getElementById('start-msg');
-    const topicLine = document.getElementById('start-topic');
-    topicLine.textContent = topic;
-    topicLine.hidden = !topic;
-    if (ready.length < 2) {
-      btn.disabled = true;
-      msg.textContent = topic
-        ? 'Put at least two words with a photo and your voice in rotation under “' + topic + '”, or choose another topic (hold two fingers on the screen).'
-        : 'Add at least two words in the parent area first (hold two fingers on the screen).';
-      msg.hidden = false;
-    } else {
-      btn.disabled = false;
-      msg.hidden = true;
-    }
   }
 
   /* ---------- the two-finger long-press gate ----------
@@ -83,8 +65,7 @@ window.FWApp = (function () {
   /* ---------- boot ---------- */
 
   async function boot() {
-    document.getElementById('btn-start').addEventListener('click', () => FWSession.begin());
-    document.getElementById('btn-end-home').addEventListener('click', () => show('start'));
+    document.getElementById('btn-end-home').addEventListener('click', () => FWParent.open());
 
     document.querySelectorAll('.app-version').forEach(e => { e.textContent = 'version ' + APP_VERSION; });
 
@@ -114,11 +95,7 @@ window.FWApp = (function () {
     });
 
     const words = await FWDB.allWords();
-    if (words.length === 0) {
-      FWParent.open('welcome');
-    } else {
-      show('start');
-    }
+    FWParent.open(words.length === 0 ? 'welcome' : undefined);
   }
 
   document.addEventListener('DOMContentLoaded', boot);

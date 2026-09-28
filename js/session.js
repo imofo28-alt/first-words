@@ -27,6 +27,9 @@ window.FWSession = (function () {
   const NEXT_GAP = 0.1;               // during the drag the next photo trails this fraction of a photo behind
 
   const audioEl = new Audio();
+  // A silent clip played inside the parent's tap: after that, later words may play on
+  // their own (browsers only allow sound that a tap started).
+  const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
   let state = null;           // { mode, words, target, locked, moments, order, index }
   let activePointer = null;   // pair mode: the one finger that counts
   let drag = null;            // swipe mode: the one finger that counts
@@ -75,6 +78,18 @@ window.FWSession = (function () {
     document.getElementById('screen-session').dataset.mode = mode;
     if (mode === 'swipe') renderSwipe(); else renderPair();
     FWApp.show('session');
+
+    // The first word speaks as soon as Start is tapped (parent's request 2026-09-28).
+    if (mode === 'swipe') speak(state.words[state.index]);
+    else namePair(document.getElementById('card-0'));
+  }
+
+  function unlockAudio() {
+    try {
+      audioEl.src = SILENT_WAV;
+      const p = audioEl.play();
+      if (p && p.catch) p.catch(() => {});
+    } catch (e) { /* fine: the tap on a photo still plays */ }
   }
 
   /* ---------- shared ---------- */
@@ -396,5 +411,5 @@ window.FWSession = (function () {
 
   document.addEventListener('DOMContentLoaded', wire);
 
-  return { begin, abort, isRunning };
+  return { begin, abort, isRunning, unlockAudio };
 })();

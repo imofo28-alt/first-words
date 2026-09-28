@@ -710,13 +710,12 @@ window.FWParent = (function () {
     document.querySelectorAll('input[name="session-mode"]').forEach(r => {
       r.addEventListener('change', () => { if (r.checked) FWDB.setSetting('sessionMode', r.value); });
     });
-    const goHome = async () => {
+    $('btn-to-start').addEventListener('click', async () => {
+      FWSession.unlockAudio(); // inside the tap, so the first word may speak without another tap
       await closeFlow(true);
       hideForm();
-      FWApp.show('start');
-    };
-    $('btn-to-start').addEventListener('click', goHome);
-    $('btn-home').addEventListener('click', goHome);
+      FWSession.begin();
+    });
   }
 
   document.addEventListener('DOMContentLoaded', wire);
