@@ -1,7 +1,7 @@
 /* Screen switching, the two-finger parent gate, and boot. */
 
 window.FWApp = (function () {
-  const APP_VERSION = '13'; // shown on screen so a stale copy can be spotted; bump ?v= in index.html and V in sw.js too
+  const APP_VERSION = '14'; // shown on screen so a stale copy can be spotted; bump ?v= in index.html and V in sw.js too
   const GATE_HOLD_MS = 2000;     // two fingers, held still this long, opens the parent area
   const GATE_MAX_MOVE_PX = 30;
 

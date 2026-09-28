@@ -8,14 +8,16 @@
    pair — two photos. He taps either one; it grows alone and is named. A swipe in any
      direction brings the next two (2026-09-28, at the parent's request).
 
-   In both: the parent's recorded voice names the photo; touch is dead while the
-   word plays; a designed 2 s silence follows (the parent's and child's turn);
-   then a cool-down. After N naming moments the session simply ends. */
+   In both: the parent's recorded voice names the photo. While the word plays a swipe
+   does not move on, but the photo gives a little under his finger and springs back, so
+   he can see he was felt (2026-09-28). The instant the word ends the screen is his again:
+   no pause, no cool-down. After N naming moments the session simply ends (never, when
+   the limit is 0). */
 
 window.FWSession = (function () {
   const SILENCE_AFTER_WORD_MS = 0;    // no designed pause: he may swipe as soon as the word ends (parent's call 2026-09-28)
   const FOCUS_MOTION_MS = 450;        // pair: photo grows / returns
-  const EXTRA_COOLDOWN_MS = 150;      // just enough that a swipe already in progress doesn't count twice
+  const EXTRA_COOLDOWN_MS = 0;        // none: the screen is his the instant the word ends (parent's call 2026-09-28)
   const TAP_MAX_TRAVEL_PX = 80;       // a toddler tap wobbles; more than this is a drag
 
   // swipe mode
@@ -25,6 +27,12 @@ window.FWSession = (function () {
   const FLICK_PX_PER_MS = 0.45;       // ...or flick it
   const SETTLE_MS = 260;              // the glide that finishes the move after the finger lifts
   const NEXT_GAP = 0.1;               // during the drag the next photo trails this fraction of a photo behind
+
+  // both modes: a swipe while the word plays — the picture gives a little and springs back
+  const NUDGE_MAX_PX = 56;            // the most it will give, however far he pulls
+  const NUDGE_FEEL = 0.55;            // how readily it gives (rubber band; more = looser)
+  const NUDGE_BACK_MS = 380;          // the spring back...
+  const NUDGE_EASE = 'cubic-bezier(.2, 1.4, .4, 1)'; // ...with a small overshoot, so it reads as a wobble
 
   const audioEl = new Audio();
   // A silent clip played inside the parent's tap: after that, later words may play on
@@ -36,8 +44,16 @@ window.FWSession = (function () {
   let cur = null;             // swipe mode: the photo on screen
   let inc = null;             // swipe mode: the photo waiting in the wings
   let stage = null;
+  let pairEl = null;          // pair mode: the two photos as one, nudged together while the word plays
 
-  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function wait(ms) { return ms > 0 ? new Promise(r => setTimeout(r, ms)) : Promise.resolve(); }
+
+  // Rubber band: the further he pulls, the less it gives, never past NUDGE_MAX_PX.
+  function nudgeFor(off) {
+    const a = Math.abs(off);
+    const give = NUDGE_MAX_PX * (1 - 1 / ((a * NUDGE_FEEL) / NUDGE_MAX_PX + 1));
+    return off < 0 ? -give : give;
+  }
 
   async function begin() {
     const ready = (await FWDB.sessionWords()).words; // in rotation, inside the chosen topic
@@ -66,7 +82,8 @@ window.FWSession = (function () {
       index: 0,       // swipe: where he is in the ring
       moments: 0,
       target,
-      locked: false
+      locked: false,
+      holding: false  // locked for the word (not a glide): a touch now is felt, but nothing moves on
     };
 
     const now = Date.now();
@@ -76,6 +93,7 @@ window.FWSession = (function () {
     }
 
     document.getElementById('screen-session').dataset.mode = mode;
+    if (pairEl) place(pairEl, 'x', 0, false); // a nudge left mid-way when the last session was cut short
     if (mode === 'swipe') renderSwipe(); else renderPair();
     FWApp.show('session');
 
@@ -182,6 +200,8 @@ window.FWSession = (function () {
 
   async function namePair(card) {
     state.locked = true;
+    state.holding = true;
+    if (pairEl) place(pairEl, 'x', 0, false); // measure the photo from rest, not mid-spring
     const idx = parseInt(card.dataset.wordIndex, 10);
     const w = state.words[idx];
     const other = document.getElementById(card.id === 'card-0' ? 'card-1' : 'card-0');
@@ -206,7 +226,7 @@ window.FWSession = (function () {
       renderPair();
     }
     await wait(EXTRA_COOLDOWN_MS);
-    if (state) state.locked = false;
+    if (state) { state.holding = false; state.locked = false; }
   }
 
   // A swipe anywhere on the pair screen: the next two photos from the ring.
@@ -223,19 +243,41 @@ window.FWSession = (function () {
 
   function wirePair() {
     const screen = document.getElementById('screen-session');
+    pairEl = screen.querySelector('.pair');
     const cardOf = el => el && el.closest ? el.closest('.card') : null;
+    const springBackPair = a => { if (a.axis) place(pairEl, a.axis, 0, true, NUDGE_EASE, NUDGE_BACK_MS); };
 
     screen.addEventListener('pointerdown', e => {
-      if (!state || state.mode !== 'pair' || state.locked) return;
+      if (!state || state.mode !== 'pair') return;
       if (activePointer !== null) return; // first touch wins; extra fingers do nothing
-      activePointer = { id: e.pointerId, card: cardOf(e.target), x: e.clientX, y: e.clientY };
+      if (state.locked && !state.holding) return; // photos mid-move: nothing to take hold of yet
+      activePointer = {
+        id: e.pointerId, card: cardOf(e.target), x: e.clientX, y: e.clientY,
+        held: state.locked, // the word is playing: the photos give a little under his finger, no more
+        axis: null
+      };
+    });
+
+    // Only a touch made while the word plays is followed; a free touch is judged when it lifts.
+    screen.addEventListener('pointermove', e => {
+      const a = activePointer;
+      if (!a || e.pointerId !== a.id || !a.held || !state) return;
+      const dx = e.clientX - a.x;
+      const dy = e.clientY - a.y;
+      if (!a.axis) {
+        if (Math.hypot(dx, dy) < AXIS_LOCK_PX) return;
+        a.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+      }
+      place(pairEl, a.axis, nudgeFor(a.axis === 'x' ? dx : dy), false);
     });
 
     screen.addEventListener('pointerup', e => {
       if (!activePointer || e.pointerId !== activePointer.id) return;
       const a = activePointer;
       activePointer = null;
-      if (!state || state.mode !== 'pair' || state.locked) return;
+      if (!state || state.mode !== 'pair') return;
+      if (a.held) { springBackPair(a); return; } // he was felt; the word finishes; nothing moves on
+      if (state.locked) return;
       const travel = Math.hypot(e.clientX - a.x, e.clientY - a.y);
       if (travel > TAP_MAX_TRAVEL_PX) { nextPair(); return; } // a swipe: next two
       const card = cardOf(e.target);
@@ -244,7 +286,10 @@ window.FWSession = (function () {
     });
 
     screen.addEventListener('pointercancel', e => {
-      if (activePointer && e.pointerId === activePointer.id) activePointer = null;
+      if (!activePointer || e.pointerId !== activePointer.id) return;
+      const a = activePointer;
+      activePointer = null;
+      if (a.held) springBackPair(a);
     });
   }
 
@@ -260,9 +305,11 @@ window.FWSession = (function () {
     el.dataset.wordIndex = String(wordIdx);
   }
 
-  // Move a photo along the swipe axis; animate = glide there rather than jump.
-  function place(el, axis, off, animate) {
-    el.style.transition = animate ? 'transform ' + SETTLE_MS + 'ms ease-out' : 'none';
+  // Move an element along the swipe axis; animate = glide there rather than jump.
+  function place(el, axis, off, animate, ease, ms) {
+    el.style.transition = animate
+      ? 'transform ' + (ms || SETTLE_MS) + 'ms ' + (ease || 'ease-out')
+      : 'none';
     el.style.transform = axis === 'y'
       ? 'translate3d(0, ' + off + 'px, 0)'
       : 'translate3d(' + off + 'px, 0, 0)';
@@ -279,20 +326,24 @@ window.FWSession = (function () {
   }
 
   function onSwipeDown(e) {
-    if (!state || state.mode !== 'swipe' || state.locked) return;
+    if (!state || state.mode !== 'swipe') return;
     if (drag !== null) return; // first touch wins; extra fingers do nothing
+    if (state.locked && !state.holding) return; // a photo is mid-glide: nothing to take hold of yet
     drag = {
       id: e.pointerId,
       x0: e.clientX, y0: e.clientY, t0: performance.now(),
-      axis: null, dir: 0, off: 0, size: 0,
+      axis: null, dir: 0, off: 0, size: 0, span: 0,
+      held: state.locked,     // the word is playing: the photo gives, but does not go
+      promoted: false,
       onPhoto: cur.contains(e.target)
     };
     try { stage.setPointerCapture(e.pointerId); } catch (err) { /* fine without it */ }
   }
 
   function onSwipeMove(e) {
-    if (!drag || e.pointerId !== drag.id) return;
-    if (!state || state.locked) return;
+    if (!drag || e.pointerId !== drag.id || !state) return;
+    if (drag.held && !state.locked) promote(e); // the word ended under his finger: from here on, a real swipe
+    if (!drag.held && state.locked) return;
     const dx = e.clientX - drag.x0;
     const dy = e.clientY - drag.y0;
     if (!drag.axis) {
@@ -303,6 +354,12 @@ window.FWSession = (function () {
       drag.span = (drag.axis === 'x' ? r.width : r.height) * (1 + NEXT_GAP);
     }
     const off = drag.axis === 'x' ? dx : dy;
+    if (drag.held) {
+      // While the word plays: the photo gives a little the way he pulls, so the swipe is seen.
+      drag.off = nudgeFor(off);
+      place(cur, drag.axis, drag.off, false);
+      return;
+    }
     const dir = off < 0 ? 1 : -1; // only which side the next photo waits on: the side he pulls from
     if (dir !== drag.dir) {
       drag.dir = dir;
@@ -313,11 +370,23 @@ window.FWSession = (function () {
     place(inc, drag.axis, off + dir * drag.span, false); // right behind it, on the side he is pulling from
   }
 
+  // The word ended while his finger was still down: the photo carries on from where it is
+  // as a real swipe. Only the movement from here on counts.
+  function promote(e) {
+    drag.held = false;
+    drag.promoted = true;
+    drag.t0 = performance.now();
+    if (drag.axis === 'x') drag.x0 = e.clientX - drag.off;
+    else if (drag.axis === 'y') drag.y0 = e.clientY - drag.off;
+  }
+
   async function onSwipeUp(e) {
     if (!drag || e.pointerId !== drag.id) return;
     const d = drag;
     drag = null;
-    if (!state || state.locked) return;
+    if (!state) return;
+    if (d.held) { springBack(d); return; } // he was felt; the word finishes; nothing moves on
+    if (state.locked) return;
     const travel = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
     if (!d.axis) {
       if (d.onPhoto && travel <= TAP_MAX_TRAVEL_PX) sayAgain();
@@ -330,7 +399,7 @@ window.FWSession = (function () {
       await land(d);
     } else {
       await settleBack(d);
-      if (d.onPhoto && travel <= TAP_MAX_TRAVEL_PX) sayAgain(); // a wobbly tap is still a tap
+      if (!d.promoted && d.onPhoto && travel <= TAP_MAX_TRAVEL_PX) sayAgain(); // a wobbly tap is still a tap
     }
   }
 
@@ -338,7 +407,14 @@ window.FWSession = (function () {
     if (!drag || e.pointerId !== drag.id) return;
     const d = drag;
     drag = null;
-    if (d.axis && state && !state.locked) settleBack(d);
+    if (!state || !d.axis) return;
+    if (d.held) springBack(d);
+    else if (!state.locked) settleBack(d);
+  }
+
+  // Let go while the word plays: the photo springs back with a small overshoot — felt you; not yet.
+  function springBack(d) {
+    if (d.axis) place(cur, d.axis, 0, true, NUDGE_EASE, NUDGE_BACK_MS);
   }
 
   // The next photo finishes its glide in, the old one leaves the way he pushed it, then it is named.
@@ -369,6 +445,7 @@ window.FWSession = (function () {
 
   async function speak(w) {
     state.locked = true;
+    state.holding = true; // touch is held for the word: a swipe gives and springs back
     await playAudio(w.audioUrl);
     if (!state) return;
     await wait(SILENCE_AFTER_WORD_MS);
@@ -378,7 +455,7 @@ window.FWSession = (function () {
       return;
     }
     await wait(EXTRA_COOLDOWN_MS);
-    if (state) state.locked = false;
+    if (state) { state.holding = false; state.locked = false; }
   }
 
   function sayAgain() {
